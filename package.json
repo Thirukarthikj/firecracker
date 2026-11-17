@@ -2,7 +2,6 @@
   "name": "firecracker",
   "version": "1.0.0",
   "description": "Sivakasi Firecrackers e-commerce web platform with product catalog, cart drawer, WhatsApp checkout, MongoDB orders storage, and admin panel.",
-  "main": "server.js",
   "scripts": {
     "test": "node test-project.js",
     "start": "node server.js"
