@@ -279,6 +279,271 @@ li>a {
   background: var(--ink);
   color: #fff;
 }
+.btn-add-cart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-top: 12px;
+  border-radius: 4px;
+}
+.btn-add-cart:hover {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0a0806;
+}
+.btn-add-cart.added {
+  background: #2e7d32 !important;
+  border-color: #2e7d32 !important;
+  color: #fff !important;
+}
+
+/* ═══════════════════════════════════
+   SHOPPING CART DRAWER & BADGE
+═══════════════════════════════════ */
+.nav-cart-btn {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--gold);
+  transition: all 0.25s ease;
+}
+.nav-cart-btn:hover {
+  background: var(--gold);
+  color: #0a0806;
+}
+.cart-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #e63946;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+/* Floating Cart Pill */
+.floating-cart-pill {
+  position: fixed;
+  bottom: 96px;
+  right: 28px;
+  z-index: 998;
+  background: #111;
+  color: #fff;
+  border: 1px solid var(--gold);
+  padding: 12px 20px;
+  border-radius: 30px;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  transition: all 0.3s ease;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.floating-cart-pill.show {
+  display: flex;
+}
+.floating-cart-pill:hover {
+  transform: translateY(-3px);
+  background: var(--gold);
+  color: #0a0806;
+}
+
+/* Cart Overlay & Drawer */
+.cart-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+.cart-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+.cart-drawer {
+  position: fixed;
+  top: 0;
+  right: -460px;
+  width: 440px;
+  max-width: 92vw;
+  height: 100%;
+  background: #fff;
+  z-index: 3001;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.25);
+  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--ink);
+}
+.cart-overlay.open .cart-drawer {
+  right: 0;
+}
+.cart-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #faf8f5;
+}
+.cart-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-family: var(--serif);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cart-close {
+  background: none;
+  border: none;
+  font-size: 1.6rem;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+.cart-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+.cart-empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: #888;
+}
+.cart-item {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.cart-item-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+.cart-item-info {
+  flex: 1;
+}
+.cart-item-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 2px;
+}
+.cart-item-code {
+  font-size: 0.75rem;
+  color: #777;
+}
+.cart-item-price {
+  font-weight: 600;
+  color: #b38029;
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+.cart-qty-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cart-qty-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  background: #f7f7f7;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cart-qty-btn:hover {
+  background: #eee;
+}
+.cart-item-del {
+  color: #c92a2a;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-left: auto;
+  padding: 4px 8px;
+}
+.cart-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #eee;
+  background: #faf8f5;
+}
+.cart-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.cart-input-field {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+  box-sizing: border-box;
+}
+.btn-checkout-wa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  background: #25D366;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.btn-checkout-wa:hover {
+  background: #1eb956;
+}
 
 /* ═══════════════════════════════════
    FOOTER
@@ -385,8 +650,8 @@ footer {
 .hero-img-wrap {
   position: absolute;
   inset: 0;
-  background: url('../images/bk1.jpg') center / cover no-repeat;
-  opacity: 0.6;
+  background: url('../images/diwali-hero.jpg') center / cover no-repeat;
+  opacity: 0.65;
   z-index: 0;
 }
 .hero-overlay {
@@ -572,8 +837,8 @@ footer {
 .bridal-img {
   position: relative;
   overflow: hidden;
-  background: url('../images/hm1.png') center / contain no-repeat;
-  background-color: #faf9f6; /* neutral fallback */
+  background: url('../images/diwali-crackers-hamper.jpg') center / cover no-repeat;
+  background-color: #1a0f0a; /* festive fallback */
 }
 .bridal-content {
   background: var(--off-white);
@@ -1664,4 +1929,89 @@ footer {
 }
 .fade-up:nth-child(4) {
   transition-delay: 0.3s;
+}
+
+/* ═══════════════════════════════════
+   LEGAL / INFO PAGES
+═══════════════════════════════════ */
+.legal-hero {
+  padding: 80px 48px 48px;
+  background: var(--ink);
+  text-align: center;
+}
+.legal-hero .section-title {
+  color: #fff;
+  margin-bottom: 8px;
+}
+.legal-hero .section-sub {
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  margin: 0 auto;
+}
+.legal-body {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 64px 48px 80px;
+}
+.legal-body p {
+  font-size: 0.92rem;
+  line-height: 1.85;
+  color: var(--mid);
+  margin-bottom: 16px;
+}
+.legal-body h3 {
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  color: var(--ink);
+  margin: 32px 0 10px;
+}
+.legal-body a {
+  color: var(--gold);
+  text-decoration: underline;
+}
+.faq-item {
+  padding: 24px 0;
+  border-bottom: 1px solid var(--stone);
+}
+.faq-item h3 {
+  margin-top: 0;
+  font-size: 1.15rem;
+}
+.faq-item p {
+  margin-bottom: 0;
+}
+
+/* Floating WhatsApp button */
+.whatsapp-float {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 1500;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #25d366;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(37, 211, 102, 0.45);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.whatsapp-float:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(37, 211, 102, 0.55);
+}
+@media (max-width: 768px) {
+  .legal-hero,
+  .legal-body {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+  .whatsapp-float {
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+  }
 }

@@ -19,3 +19,6 @@ ui-debug.log
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Backups
+frontend/images/backup_jewellery/

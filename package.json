@@ -1,0 +1,30 @@
+{
+  "name": "firecracker",
+  "version": "1.0.0",
+  "description": "Sivakasi Firecrackers e-commerce web platform with product catalog, cart drawer, WhatsApp checkout, MongoDB orders storage, and admin panel.",
+  "main": "server.js",
+  "scripts": {
+    "test": "node test-project.js",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Thirukarthikj/firecracker.git"
+  },
+  "keywords": [
+    "firecrackers",
+    "sivakasi",
+    "diwali",
+    "ecommerce",
+    "mongodb"
+  ],
+  "author": "Thirukarthik J",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Thirukarthikj/firecracker/issues"
+  },
+  "homepage": "https://github.com/Thirukarthikj/firecracker#readme",
+  "dependencies": {
+    "mongodb": "^7.9.0"
+  }
+}
