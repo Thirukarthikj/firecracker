@@ -310,6 +310,11 @@ const server = http.createServer(async (req, res) => {
   // STATIC FILE SERVING
   // ═══════════════════════════════════════════
   let reqPath = decodeURI(pathname);
+  if (reqPath.startsWith('/frontend/')) {
+    reqPath = reqPath.substring('/frontend'.length);
+  } else if (reqPath === '/frontend') {
+    reqPath = '/';
+  }
   let filePath = path.join(ROOT, reqPath);
 
   // If path is a directory, look for index.html inside it
@@ -335,9 +340,15 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
-initMongo().then(() => {
-  server.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}/`);
-    console.log(`Admin panel: http://localhost:${PORT}/admin/`);
+if (require.main === module) {
+  initMongo().then(() => {
+    server.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}/`);
+      console.log(`Admin panel: http://localhost:${PORT}/admin/`);
+    });
   });
-});
+} else {
+  initMongo();
+}
+
+module.exports = server;

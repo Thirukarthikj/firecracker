@@ -1,22 +1,14 @@
 {
   "version": 2,
-  "cleanUrls": true,
+  "functions": {
+    "server.js": {
+      "includeFiles": "frontend/**"
+    }
+  },
   "rewrites": [
     {
-      "source": "/admin",
-      "destination": "/frontend/admin/index.html"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/frontend/admin/$1"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/server.js"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/frontend/$1"
+      "destination": "/server.js"
     }
   ]
 }
