@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   CLOUDINARY CONFIG — Thangamalar Jewellers (public site)
+   CLOUDINARY CONFIG — Vel Agencies (public site)
    ───────────────────────────────────────────────────────────────
    The public site only ever *displays* Cloudinary image URLs that
    are already stored in Firestore (written by the admin panel), so
@@ -9,4 +9,4 @@
    thumbnails via Cloudinary's URL transformation syntax — see
    cloudinaryThumb() in js/main.js.
 ═══════════════════════════════════════════════════════════════ */
-const CLOUDINARY_CLOUD_NAME = "go7pldv9";
+const CLOUDINARY_CLOUD_NAME = "tci2igsn";
