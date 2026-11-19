@@ -109,20 +109,63 @@ function renderGrid() {
     return;
   }
 
-  grid.innerHTML = filtered.map((p) => `
-    <div class="card ${p.active === false ? 'inactive' : ''}">
-      <img src="${cloudinaryThumb(p.image, 400)}" alt="${escapeHtml(p.name)}" onerror="this.src='https://placehold.co/300x300?text=No+Image'">
-      <div class="body">
-        <div class="code">${escapeHtml(p.code)}${p.active === false ? '<span class="badge-pill">Hidden</span>' : ''}</div>
-        <div class="name">${escapeHtml(p.name)}</div>
-        <div class="meta">${escapeHtml(p.material || '')} &middot; ${escapeHtml(p.type || '')}${p.price ? ' &middot; <strong>₹' + escapeHtml(p.price) + '</strong>' : ''}${p.pieces ? ' (' + escapeHtml(p.pieces) + ')' : ''}</div>
-        <div class="actions">
-          <button class="secondary" onclick='openForm(${JSON.stringify(p.id)})'>Edit</button>
-          <button class="danger" onclick='deleteProduct(${JSON.stringify(p.id)})'>Delete</button>
+  grid.innerHTML = filtered.map((p) => {
+    const mrpNum = Number(p.mrp) || Number(p.price) || 0;
+    const offerNum = Number(p.offerPrice) || Number(p.price) || 0;
+    const discPct = p.discountPercentage || (mrpNum > offerNum && mrpNum > 0 ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
+    const priceDisplay = discPct > 0 ? `
+      <div class="card-price-row">
+        <span class="card-mrp">₹${mrpNum.toLocaleString('en-IN')}</span>
+        <span class="card-offer">₹${offerNum.toLocaleString('en-IN')}</span>
+        <span class="card-discount-badge">${discPct}% OFF</span>
+      </div>
+    ` : `
+      <div class="card-price-row">
+        <span class="card-offer">₹${offerNum.toLocaleString('en-IN')}</span>
+      </div>
+    `;
+
+    return `
+      <div class="card ${p.active === false ? 'inactive' : ''}">
+        <img src="${cloudinaryThumb(p.image, 400)}" alt="${escapeHtml(p.name)}" onerror="this.src='https://placehold.co/300x300?text=No+Image'">
+        <div class="body">
+          <div class="code">${escapeHtml(p.code)}${p.active === false ? '<span class="badge-pill">Hidden</span>' : ''}</div>
+          <div class="name">${escapeHtml(p.name)}</div>
+          ${priceDisplay}
+          <div class="meta">${escapeHtml(p.material || '')} &middot; ${escapeHtml(p.type || '')}${p.pieces ? ' (' + escapeHtml(p.pieces) + ')' : ''}</div>
+          <div class="actions">
+            <button class="secondary" onclick='openForm(${JSON.stringify(p.id)})'>Edit</button>
+            <button class="danger" onclick='deleteProduct(${JSON.stringify(p.id)})'>Delete</button>
+          </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+}
+
+function calcAdminDiscount() {
+  const mrpVal = parseFloat(document.getElementById('f_mrp')?.value) || 0;
+  const offerVal = parseFloat(document.getElementById('f_price')?.value) || 0;
+  const discInput = document.getElementById('f_discount');
+  const errEl = document.getElementById('formError');
+  if (!discInput) return;
+
+  if (mrpVal > 0 && offerVal > 0) {
+    if (offerVal > mrpVal) {
+      if (errEl) {
+        errEl.textContent = 'Offer Price cannot exceed MRP (Original Price).';
+        errEl.style.display = 'block';
+      }
+      discInput.value = '0% OFF';
+      return;
+    } else if (errEl && errEl.textContent.includes('Offer Price cannot exceed')) {
+      errEl.style.display = 'none';
+    }
+    const pct = Math.round(((mrpVal - offerVal) / mrpVal) * 100);
+    discInput.value = pct > 0 ? `${pct}% OFF` : '0% OFF';
+  } else {
+    discInput.value = '0% OFF';
+  }
 }
 
 function cloudinaryThumb(url, width) {
@@ -156,7 +199,11 @@ function openForm(id) {
     document.getElementById('f_name').value = p.name || '';
     document.getElementById('f_material').value = p.material || 'sparklers';
     document.getElementById('f_type').value = p.type || 'sparklers';
-    document.getElementById('f_price').value = p.price || '';
+    const mrp = p.mrp || p.price || '';
+    const offer = p.offerPrice || p.price || '';
+    document.getElementById('f_mrp').value = mrp;
+    document.getElementById('f_price').value = offer;
+    calcAdminDiscount();
     document.getElementById('f_pieces').value = p.pieces || '';
     document.getElementById('f_badge').value = p.badge || '';
     document.getElementById('f_description').value = p.description || '';
@@ -171,6 +218,9 @@ function openForm(id) {
     document.getElementById('formTitle').textContent = 'Add Cracker';
     document.getElementById('productForm').reset();
     document.getElementById('productId').value = '';
+    document.getElementById('f_mrp').value = '';
+    document.getElementById('f_price').value = '';
+    document.getElementById('f_discount').value = '0% OFF';
     document.getElementById('f_active').checked = true;
     document.getElementById('saveBtn').textContent = 'Save Cracker';
   }
@@ -266,7 +316,8 @@ async function saveProduct(e) {
   const name = document.getElementById('f_name').value.trim();
   const material = document.getElementById('f_material').value;
   const type = document.getElementById('f_type').value;
-  const price = document.getElementById('f_price').value.trim();
+  const mrp = parseFloat(document.getElementById('f_mrp').value) || 0;
+  const offerPrice = parseFloat(document.getElementById('f_price').value) || 0;
   const pieces = document.getElementById('f_pieces').value.trim();
   const badge = document.getElementById('f_badge').value.trim();
   const description = document.getElementById('f_description').value.trim();
@@ -278,8 +329,27 @@ async function saveProduct(e) {
     return false;
   }
 
+  if (mrp <= 0 || offerPrice <= 0) {
+    errEl.textContent = 'Both MRP and Offer Price must be greater than zero.';
+    errEl.style.display = 'block';
+    return false;
+  }
+
+  if (offerPrice > mrp) {
+    errEl.textContent = 'Offer Price (Selling Price) cannot exceed MRP (Original Price).';
+    errEl.style.display = 'block';
+    return false;
+  }
+
+  const discountPercentage = Math.round(((mrp - offerPrice) / mrp) * 100);
+
   const payload = {
-    code, name, material, type, price, pieces, badge, description, active,
+    code, name, material, type,
+    mrp: mrp,
+    offerPrice: offerPrice,
+    price: String(offerPrice), // backwards-compatible string
+    discountPercentage: discountPercentage,
+    pieces, badge, description, active,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   if (currentUploadedImage) {
@@ -552,19 +622,31 @@ function renderOrders() {
 
     // Render Items
     const items = order.items || [];
+    let orderMrpCalc = 0;
+    let orderOfferCalc = 0;
     const itemsTable = items.map((item) => {
-      const lineTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+      const qty = Number(item.quantity) || 1;
+      const offerPrice = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+      const mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offerPrice;
+      const lineTotal = qty * offerPrice;
+      orderMrpCalc += (qty * mrp);
+      orderOfferCalc += lineTotal;
       const imgTag = item.image ? `<img src="${escapeHtml(item.image)}" alt="" class="order-item-img" onerror="this.onerror=null;this.src='../images/placeholder.jpg'">` : '';
       return `
         <tr>
           <td>${imgTag}<strong>${escapeHtml(item.name || 'Cracker Item')}</strong> ${item.sku ? `<span style="font-size:0.75rem;color:#888">(${escapeHtml(item.sku)})</span>` : ''}</td>
           <td>${escapeHtml(item.pieces || '—')}</td>
-          <td>${item.quantity || 1}</td>
-          <td>₹${(item.price || 0).toLocaleString('en-IN')}</td>
-          <td><strong>₹${lineTotal.toLocaleString('en-IN')}</strong></td>
+          <td style="text-align:center">${qty}</td>
+          <td style="text-align:right">${mrp > offerPrice ? `<span style="text-decoration:line-through;color:#888">₹${mrp.toLocaleString('en-IN')}</span>` : `₹${mrp.toLocaleString('en-IN')}`}</td>
+          <td style="text-align:right"><strong>₹${offerPrice.toLocaleString('en-IN')}</strong></td>
+          <td style="text-align:right"><strong>₹${lineTotal.toLocaleString('en-IN')}</strong></td>
         </tr>
       `;
     }).join('');
+
+    const orderTotalMrp = Number(order.totalMrp) || orderMrpCalc;
+    const orderTotalOffer = Number(order.total || order.subtotal) || orderOfferCalc;
+    const orderSavings = Number(order.totalSavings || order.discount) || Math.max(0, orderTotalMrp - orderTotalOffer);
 
     const idStr = order._id || order.orderNumber;
     const locLine = [cust.addressLine1 || cust.address, cust.city, cust.district, cust.state].filter(Boolean).join(', ') + (cust.pincode ? ' - ' + cust.pincode : '');
@@ -598,9 +680,10 @@ function renderOrders() {
               <tr>
                 <th>Cracker Item</th>
                 <th>Packing</th>
-                <th>Qty</th>
-                <th>Price</th>
-                <th>Total</th>
+                <th style="text-align:center">Qty</th>
+                <th style="text-align:right">MRP</th>
+                <th style="text-align:right">Offer Price</th>
+                <th style="text-align:right">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -610,12 +693,17 @@ function renderOrders() {
 
           <div class="order-footer">
             <div class="order-total-block">
-              <span>Grand Total:</span>
-              <span class="order-total-amount">₹${(order.total || order.subtotal || 0).toLocaleString('en-IN')}</span>
+              ${orderSavings > 0 ? `<div style="font-size:0.8rem;color:#888">Total MRP: <span style="text-decoration:line-through">₹${orderTotalMrp.toLocaleString('en-IN')}</span></div>` : ''}
+              <div>
+                <span>Grand Total:</span>
+                <span class="order-total-amount">₹${orderTotalOffer.toLocaleString('en-IN')}</span>
+              </div>
+              ${orderSavings > 0 ? `<div style="font-size:0.8rem;color:#166534;font-weight:600">🎉 Customer Saves: ₹${orderSavings.toLocaleString('en-IN')}</div>` : ''}
             </div>
             <div class="order-actions-block">
               <button type="button" class="btn-view-order" onclick="openOrderDetails('${idStr}')">👁️ View Details</button>
               <button type="button" class="btn-invoice-pdf" onclick="downloadInvoicePDF('${idStr}')" title="Download Official PDF Invoice">📄 Download PDF</button>
+              <button type="button" class="btn-invoice-wa" onclick="shareInvoiceWhatsApp('${idStr}')" title="Share Invoice on Customer WhatsApp">💬 WhatsApp Invoice</button>
               <label style="font-size:0.8rem;color:#666;margin-left:4px">Status:</label>
               <select class="status-select" onchange="updateOrderStatus('${idStr}', this.value)">
                 <option value="pending" ${currentStatus === 'pending' ? 'selected' : ''}>Pending</option>
@@ -681,12 +769,18 @@ function openOrderDetails(orderId) {
 
   // Items table
   const tbody = document.getElementById('modalItemsTableBody');
+  const items = order.items || [];
+  let modalMrpCalc = 0;
+  let modalOfferCalc = 0;
+
   if (tbody) {
-    const items = order.items || [];
     tbody.innerHTML = items.map((item) => {
       const q = Number(item.quantity) || 1;
-      const p = Number(item.price) || 0;
-      const sub = q * p;
+      const offer = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+      const mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offer;
+      const sub = q * offer;
+      modalMrpCalc += (q * mrp);
+      modalOfferCalc += sub;
       const imgTag = item.image ? `<img src="${escapeHtml(item.image)}" alt="" class="order-item-img" onerror="this.onerror=null;this.src='../images/placeholder.jpg'">` : '';
       return `
         <tr>
@@ -694,7 +788,8 @@ function openOrderDetails(orderId) {
           <td>${escapeHtml(item.category || item.type || 'Firecracker')}</td>
           <td>${escapeHtml(item.pieces || '—')}</td>
           <td style="text-align:center"><strong>${q}</strong></td>
-          <td style="text-align:right">₹${p.toLocaleString('en-IN')}</td>
+          <td style="text-align:right">${mrp > offer ? `<span style="text-decoration:line-through;color:#888">₹${mrp.toLocaleString('en-IN')}</span>` : `₹${mrp.toLocaleString('en-IN')}`}</td>
+          <td style="text-align:right"><strong>₹${offer.toLocaleString('en-IN')}</strong></td>
           <td style="text-align:right"><strong>₹${sub.toLocaleString('en-IN')}</strong></td>
         </tr>
       `;
@@ -702,11 +797,22 @@ function openOrderDetails(orderId) {
   }
 
   // Financial & Payment
+  const modalTotalMrp = Number(order.totalMrp) || modalMrpCalc;
+  const modalSubtotal = Number(order.subtotal || order.total) || modalOfferCalc;
+  const modalSavings = Number(order.totalSavings || order.discount) || Math.max(0, modalTotalMrp - modalSubtotal);
+
   document.getElementById('modalPaymentStatus').textContent = paymentStatus.toUpperCase();
   document.getElementById('modalPaymentMethod').textContent = (order.paymentMethod || 'direct_order').toUpperCase();
   document.getElementById('modalInvoiceNumber').textContent = order.invoiceNumber || 'Not Generated Yet';
-  document.getElementById('modalSubtotal').textContent = '₹' + (Number(order.subtotal || order.total) || 0).toLocaleString('en-IN');
-  document.getElementById('modalGrandTotal').textContent = '₹' + (Number(order.total) || 0).toLocaleString('en-IN');
+  
+  const elMrp = document.getElementById('modalTotalMrp');
+  if (elMrp) elMrp.textContent = '₹' + modalTotalMrp.toLocaleString('en-IN');
+  const elSavings = document.getElementById('modalTotalSavings');
+  if (elSavings) elSavings.textContent = '₹' + modalSavings.toLocaleString('en-IN');
+
+  const elSubtotal = document.getElementById('modalSubtotal');
+  if (elSubtotal) elSubtotal.textContent = '₹' + modalSubtotal.toLocaleString('en-IN');
+  document.getElementById('modalGrandTotal').textContent = '₹' + modalSubtotal.toLocaleString('en-IN');
 
   const statusSel = document.getElementById('modalStatusSelect');
   if (statusSel) statusSel.value = status;
@@ -1060,10 +1166,15 @@ async function downloadInvoicePDF(orderId) {
 
   // Table of Items
   const items = order.items || [];
+  let totalMrpCalc = 0;
+  let totalOfferCalc = 0;
   const tableRows = items.map((item, index) => {
     const qty = Number(item.quantity) || 1;
-    const price = Number(item.price) || 0;
-    const total = qty * price;
+    const offer = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+    const mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offer;
+    const total = qty * offer;
+    totalMrpCalc += (qty * mrp);
+    totalOfferCalc += total;
     const categoryName = item.category || item.material || 'Firecrackers';
     return [
       String(index + 1),
@@ -1071,7 +1182,8 @@ async function downloadInvoicePDF(orderId) {
       categoryName,
       item.pieces || '1 Box',
       String(qty),
-      `Rs. ${price.toLocaleString('en-IN')}`,
+      `Rs. ${mrp.toLocaleString('en-IN')}`,
+      `Rs. ${offer.toLocaleString('en-IN')}`,
       `Rs. ${total.toLocaleString('en-IN')}`
     ];
   });
@@ -1079,12 +1191,12 @@ async function downloadInvoicePDF(orderId) {
   if (doc.autoTable) {
     doc.autoTable({
       startY: 88,
-      head: [['#', 'Item Description', 'Category', 'Packing', 'Qty', 'Unit Rate', 'Amount']],
+      head: [['#', 'Item Description', 'Category', 'Packing', 'Qty', 'MRP', 'Offer Rate', 'Amount']],
       body: tableRows,
       theme: 'grid',
       styles: {
-        fontSize: 8.5,
-        cellPadding: 3,
+        fontSize: 8,
+        cellPadding: 2.8,
         textColor: [30, 30, 30],
         lineColor: [226, 221, 210]
       },
@@ -1095,13 +1207,14 @@ async function downloadInvoicePDF(orderId) {
         halign: 'left'
       },
       columnStyles: {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 62 },
-        2: { cellWidth: 32 },
-        3: { cellWidth: 26 },
-        4: { cellWidth: 14, halign: 'center' },
-        5: { cellWidth: 24, halign: 'right' },
-        6: { cellWidth: 24, halign: 'right' }
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 54 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 12, halign: 'center' },
+        5: { cellWidth: 20, halign: 'right' },
+        6: { cellWidth: 22, halign: 'right' },
+        7: { cellWidth: 22, halign: 'right' }
       },
       alternateRowStyles: {
         fillColor: [252, 250, 247]
@@ -1112,40 +1225,43 @@ async function downloadInvoicePDF(orderId) {
   const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 6 : 140;
 
   // Financial Summary Block
-  const subtotal = Number(order.subtotal || order.total) || items.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 1), 0);
-  const discount = Number(order.discount) || 0;
-  const grandTotal = Number(order.total || subtotal - discount);
+  const totalMrp = Number(order.totalMrp) || totalMrpCalc;
+  const subtotal = Number(order.subtotal || order.total) || totalOfferCalc;
+  const savings = Number(order.totalSavings || order.discount) || Math.max(0, totalMrp - subtotal);
+  const grandTotal = subtotal;
 
-  const sumBoxX = 118;
+  const sumBoxX = 114;
   const sumBoxY = finalY;
-  const sumBoxW = 78;
+  const sumBoxW = 82;
 
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(226, 221, 210);
-  doc.roundedRect(sumBoxX, sumBoxY, sumBoxW, 36, 2, 2, 'FD');
+  doc.roundedRect(sumBoxX, sumBoxY, sumBoxW, 42, 2, 2, 'FD');
 
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(80, 80, 80);
-  doc.text('Subtotal:', sumBoxX + 6, sumBoxY + 8);
-  doc.text(`Rs. ${subtotal.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 8, { align: 'right' });
+  doc.setTextColor(90, 90, 90);
+  doc.text('Total MRP Value:', sumBoxX + 6, sumBoxY + 8);
+  doc.text(`Rs. ${totalMrp.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 8, { align: 'right' });
 
-  doc.text('Diwali Festival Discount:', sumBoxX + 6, sumBoxY + 14);
-  doc.text(`- Rs. ${discount.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 14, { align: 'right' });
-
-  doc.text('Packaging & Delivery:', sumBoxX + 6, sumBoxY + 20);
   doc.setTextColor(22, 101, 52);
-  doc.text('FREE (Diwali Special)', sumBoxX + sumBoxW - 6, sumBoxY + 20, { align: 'right' });
+  doc.text('Diwali Festival Savings:', sumBoxX + 6, sumBoxY + 15);
+  doc.text(`- Rs. ${savings.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 15, { align: 'right' });
+
+  doc.setTextColor(90, 90, 90);
+  doc.text('Delivery & Packaging:', sumBoxX + 6, sumBoxY + 22);
+  doc.setTextColor(22, 101, 52);
+  doc.text('FREE (Diwali Special)', sumBoxX + sumBoxW - 6, sumBoxY + 22, { align: 'right' });
 
   // Grand Total line
   doc.setDrawColor(184, 147, 58);
-  doc.line(sumBoxX + 4, sumBoxY + 24, sumBoxX + sumBoxW - 4, sumBoxY + 24);
+  doc.line(sumBoxX + 4, sumBoxY + 27, sumBoxX + sumBoxW - 4, sumBoxY + 27);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
   doc.setTextColor(184, 147, 58);
-  doc.text('Grand Total:', sumBoxX + 6, sumBoxY + 31);
-  doc.text(`Rs. ${grandTotal.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 31, { align: 'right' });
+  doc.text('Payable Amount:', sumBoxX + 6, sumBoxY + 35);
+  doc.text(`Rs. ${grandTotal.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 35, { align: 'right' });
 
   // Left Notes & Safety Guidelines Block
   doc.setFont('helvetica', 'bold');
@@ -1215,13 +1331,19 @@ async function shareInvoiceWhatsApp(orderId) {
   }
 
   const items = order.items || [];
+  let totalMrpCalc = 0;
   const itemsText = items.map((it, idx) => {
     const q = it.quantity || 1;
-    const p = it.price || 0;
-    return `${idx + 1}. *${it.name || 'Cracker'}* (${it.pieces || 'Pack'}) x ${q} = ₹${(p * q).toLocaleString('en-IN')}`;
+    const offer = Number(it.offerPrice !== undefined ? it.offerPrice : it.price) || 0;
+    const mrp = Number(it.mrp) > 0 ? Number(it.mrp) : offer;
+    totalMrpCalc += (q * mrp);
+    const priceStr = mrp > offer ? `₹${offer.toLocaleString('en-IN')} (MRP: ~₹${mrp.toLocaleString('en-IN')}~)` : `₹${offer.toLocaleString('en-IN')}`;
+    return `${idx + 1}. *${it.name || 'Cracker'}* (${it.pieces || 'Pack'}) x ${q} @ ${priceStr} = *₹${(offer * q).toLocaleString('en-IN')}*`;
   }).join('\n');
 
   const grandTotal = Number(order.total || order.subtotal) || 0;
+  const totalMrp = Number(order.totalMrp) || totalMrpCalc;
+  const totalSavings = Number(order.totalSavings || order.discount) || Math.max(0, totalMrp - grandTotal);
   const invoiceNum = order.invoiceNumber || 'INV-PENDING';
 
   const msg = [
@@ -1239,9 +1361,10 @@ async function shareInvoiceWhatsApp(orderId) {
     `*Items Ordered:*`,
     itemsText,
     ``,
-    `*Grand Total:* ₹${grandTotal.toLocaleString('en-IN')}`,
-    `*Payment Mode:* ${(order.paymentMethod || 'WhatsApp / COD').toUpperCase()}`,
-    `*Payment Status:* ${(order.paymentStatus || 'Confirmed').toUpperCase()}`,
+    totalSavings > 0 ? `*Total MRP:* ~₹${totalMrp.toLocaleString('en-IN')}~\n*🎉 Festival Savings:* ₹${totalSavings.toLocaleString('en-IN')} OFF` : ``,
+    `*Payable Amount:* *₹${grandTotal.toLocaleString('en-IN')}*`,
+    `*Payment Mode:* ${(order.paymentMethod || 'Direct Order').toUpperCase()}`,
+    `*Payment Status:* ${(order.paymentStatus || 'Pending').toUpperCase()}`,
     `*Order Status:* ${(order.status || 'Confirmed').toUpperCase()}`,
     `----------------------------------------`,
     `✨ *Thank you for celebrating with Sivakasi Firecrackers!*`,
@@ -1249,7 +1372,7 @@ async function shareInvoiceWhatsApp(orderId) {
     ``,
     `📞 Sivakasi Factory Helpline: +91 9342553805`,
     `🌐 sivakasifirecrackers.com`
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 
   window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
 

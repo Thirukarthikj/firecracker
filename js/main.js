@@ -130,10 +130,29 @@ function renderProductCard(p) {
   var badge = p.badge ? '<span class="product-badge">' + escapeHtmlCat(p.badge) + '</span>' : '';
   var thumb = cloudinaryThumb(p.image, 500);
   var full = p.image || PLACEHOLDER_IMG;
-  var priceNum = parseFloat(p.price) || 0;
-  var priceHtml = priceNum > 0
-    ? '<div class="product-price" style="font-size:1.15rem;font-weight:600;color:var(--gold);margin:4px 0">₹' + escapeHtmlCat(p.price) + (p.pieces ? ' <span style="font-size:0.8rem;color:var(--mid);font-weight:normal">(' + escapeHtmlCat(p.pieces) + ')</span>' : '') + '</div>'
-    : '<div class="product-price" style="font-size:0.9rem;font-weight:500;color:var(--mid);margin:4px 0">Price on request</div>';
+
+  var mrpNum = parseFloat(p.mrp) || parseFloat(p.price) || 0;
+  var offerNum = parseFloat(p.offerPrice !== undefined ? p.offerPrice : p.price) || 0;
+  var discPct = p.discountPercentage || ((mrpNum > offerNum && mrpNum > 0) ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
+
+  var priceHtml = '';
+  if (offerNum > 0) {
+    if (discPct > 0 && mrpNum > offerNum) {
+      priceHtml = '<div class="product-price-box">' +
+        '<span class="product-mrp">₹' + mrpNum.toLocaleString('en-IN') + '</span>' +
+        '<span class="product-offer">₹' + offerNum.toLocaleString('en-IN') + '</span>' +
+        '<span class="product-discount-badge">' + discPct + '% OFF</span>' +
+        (p.pieces ? '<span class="product-pack-info">(' + escapeHtmlCat(p.pieces) + ')</span>' : '') +
+      '</div>';
+    } else {
+      priceHtml = '<div class="product-price-box">' +
+        '<span class="product-offer">₹' + offerNum.toLocaleString('en-IN') + '</span>' +
+        (p.pieces ? '<span class="product-pack-info">(' + escapeHtmlCat(p.pieces) + ')</span>' : '') +
+      '</div>';
+    }
+  } else {
+    priceHtml = '<div class="product-price" style="font-size:0.9rem;font-weight:500;color:var(--mid);margin:4px 0">Price on request</div>';
+  }
 
   return '' +
     '<div class="product-card" data-material="' + (p.material || '') + '" data-type="' + (p.type || '') + '">' +
@@ -439,21 +458,36 @@ function addToCartByCode(code, btnEl, e) {
   if (e && e.stopPropagation) e.stopPropagation();
   var p = (allProducts || []).find(function(item) { return item.code === code; });
   if (!p) return;
-  var priceNum = parseFloat(p.price) || 0;
+  var mrpNum = parseFloat(p.mrp) || parseFloat(p.price) || 0;
+  var offerNum = parseFloat(p.offerPrice !== undefined ? p.offerPrice : p.price) || 0;
+  var discPct = p.discountPercentage || ((mrpNum > offerNum && mrpNum > 0) ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
   var full = p.image || PLACEHOLDER_IMG;
-  addToCart(p.code, p.name, priceNum, full, p.pieces || '', btnEl, e);
+  addToCart(p.code, p.name, offerNum, full, p.pieces || '', btnEl, e, mrpNum, discPct, p.material || '', p.type || '');
 }
 
-function addToCart(code, name, price, img, pieces, btnEl, e) {
+function addToCart(code, name, price, img, pieces, btnEl, e, mrp, discountPercentage, category, type) {
   if (e && e.stopPropagation) e.stopPropagation();
+  var offerPrice = parseFloat(price) || 0;
+  var mrpVal = parseFloat(mrp) > 0 ? parseFloat(mrp) : offerPrice;
+  var disc = discountPercentage !== undefined ? discountPercentage : ((mrpVal > offerPrice && mrpVal > 0) ? Math.round(((mrpVal - offerPrice) / mrpVal) * 100) : 0);
+
   var existing = cart.find(function(item) { return item.code === code; });
   if (existing) {
     existing.qty += 1;
+    existing.price = offerPrice;
+    existing.offerPrice = offerPrice;
+    existing.mrp = mrpVal;
+    existing.discountPercentage = disc;
   } else {
     cart.push({
       code: code,
       name: name,
-      price: price || 0,
+      price: offerPrice,
+      offerPrice: offerPrice,
+      mrp: mrpVal,
+      discountPercentage: disc,
+      category: category || '',
+      type: type || '',
       img: img || '',
       pieces: pieces || '',
       qty: 1
@@ -497,11 +531,19 @@ function clearCart() {
 
 function updateCartUI() {
   var totalItems = 0;
-  var totalPrice = 0;
+  var totalOfferPrice = 0;
+  var totalMrp = 0;
+
   cart.forEach(function(item) {
-    totalItems += item.qty;
-    totalPrice += (item.price || 0) * item.qty;
+    var q = item.qty || 1;
+    var offer = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+    var mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offer;
+    totalItems += q;
+    totalOfferPrice += (offer * q);
+    totalMrp += (mrp * q);
   });
+
+  var totalSavings = Math.max(0, totalMrp - totalOfferPrice);
 
   // Badges and counters
   var badgeEl = document.getElementById('cartBadge');
@@ -518,7 +560,7 @@ function updateCartUI() {
     if (totalItems > 0) {
       pillEl.classList.add('show');
       pillText.textContent = totalItems + (totalItems === 1 ? ' item' : ' items');
-      pillPrice.textContent = '₹' + totalPrice.toLocaleString('en-IN');
+      pillPrice.textContent = '₹' + totalOfferPrice.toLocaleString('en-IN');
     } else {
       pillEl.classList.remove('show');
     }
@@ -528,6 +570,9 @@ function updateCartUI() {
   var bodyEl = document.getElementById('cartBody');
   var footerEl = document.getElementById('cartFooter');
   var totalEl = document.getElementById('cartTotalPrice');
+  var mrpEl = document.getElementById('cartTotalMrp');
+  var savingsEl = document.getElementById('cartTotalSavings');
+  var savingsRow = document.getElementById('cartSavingsRow');
 
   if (!bodyEl) return;
 
@@ -543,21 +588,31 @@ function updateCartUI() {
   } else {
     var itemsHtml = cart.map(function(item) {
       var thumb = cloudinaryThumb(item.img, 150);
-      var itemTotal = (item.price || 0) * item.qty;
-      var priceStr = item.price > 0 ? '₹' + item.price.toLocaleString('en-IN') : 'Price on request';
-      var subStr = item.price > 0 ? '₹' + itemTotal.toLocaleString('en-IN') : '—';
+      var offer = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+      var mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offer;
+      var itemLineTotal = offer * item.qty;
+      var itemSavings = Math.max(0, (mrp * item.qty) - itemLineTotal);
+
+      var priceDetail = mrp > offer
+        ? '<div class="cart-item-price">' +
+            '<span class="cart-item-mrp">₹' + mrp.toLocaleString('en-IN') + '</span>' +
+            '<span class="cart-item-offer">₹' + offer.toLocaleString('en-IN') + ' each</span>' +
+            (itemSavings > 0 ? '<span class="cart-item-savings-tag"> (Save ₹' + itemSavings.toLocaleString('en-IN') + ')</span>' : '') +
+          '</div>'
+        : '<div class="cart-item-price"><span class="cart-item-offer">₹' + offer.toLocaleString('en-IN') + ' each</span></div>';
+
       return '' +
         '<div class="cart-item">' +
           '<img src="' + thumb + '" alt="' + escapeHtmlCat(item.name) + '" class="cart-item-img" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER_IMG + '\'">' +
           '<div class="cart-item-info">' +
             '<div class="cart-item-title">' + escapeHtmlCat(item.name) + '</div>' +
             '<div class="cart-item-code">' + escapeHtmlCat(item.code) + (item.pieces ? ' &middot; ' + escapeHtmlCat(item.pieces) : '') + '</div>' +
-            '<div class="cart-item-price">' + priceStr + ' each</div>' +
+            priceDetail +
             '<div class="cart-qty-ctrl">' +
               '<button class="cart-qty-btn" onclick="updateCartQty(\'' + escapeHtmlCat(item.code) + '\', -1)">&minus;</button>' +
               '<span style="font-weight:600;min-width:20px;text-align:center">' + item.qty + '</span>' +
               '<button class="cart-qty-btn" onclick="updateCartQty(\'' + escapeHtmlCat(item.code) + '\', 1)">&plus;</button>' +
-              '<span style="margin-left:8px;font-weight:700;color:var(--gold)">' + subStr + '</span>' +
+              '<span style="margin-left:8px;font-weight:700;color:var(--gold)">₹' + itemLineTotal.toLocaleString('en-IN') + '</span>' +
               '<button class="cart-item-del" onclick="removeFromCart(\'' + escapeHtmlCat(item.code) + '\')" title="Remove item">&#128465;</button>' +
             '</div>' +
           '</div>' +
@@ -566,7 +621,10 @@ function updateCartUI() {
 
     bodyEl.innerHTML = itemsHtml;
     if (footerEl) footerEl.style.display = 'block';
-    if (totalEl) totalEl.textContent = '₹' + totalPrice.toLocaleString('en-IN');
+    if (totalEl) totalEl.textContent = '₹' + totalOfferPrice.toLocaleString('en-IN');
+    if (mrpEl) mrpEl.textContent = '₹' + totalMrp.toLocaleString('en-IN');
+    if (savingsEl) savingsEl.textContent = '₹' + totalSavings.toLocaleString('en-IN');
+    if (savingsRow) savingsRow.style.display = totalSavings > 0 ? 'flex' : 'none';
   }
 }
 
@@ -630,24 +688,40 @@ function backToCart() {
 function renderCheckoutSummary() {
   var container = document.getElementById('checkoutSummaryItems');
   var totalEl = document.getElementById('checkoutSummaryTotal');
+  var mrpEl = document.getElementById('checkoutSummaryMrp');
+  var savingsEl = document.getElementById('checkoutSummarySavings');
+  var savingsRow = document.getElementById('checkoutSavingsRow');
   if (!container) return;
 
-  var totalPrice = 0;
+  var totalOfferPrice = 0;
+  var totalMrp = 0;
   var html = '';
 
   cart.forEach(function(item) {
-    var lineTotal = (item.price || 0) * (item.qty || 1);
-    totalPrice += lineTotal;
+    var q = item.qty || 1;
+    var offer = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+    var mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offer;
+    var lineTotal = offer * q;
+    totalOfferPrice += lineTotal;
+    totalMrp += (mrp * q);
+
+    var priceCol = mrp > offer
+      ? '<span><small style="text-decoration:line-through;color:#888;margin-right:6px">₹' + (mrp * q).toLocaleString('en-IN') + '</small><strong>₹' + lineTotal.toLocaleString('en-IN') + '</strong></span>'
+      : '<span><strong>₹' + lineTotal.toLocaleString('en-IN') + '</strong></span>';
+
     html += '<div class="checkout-summary-row">' +
-              '<span><strong>' + escapeHtmlCat(item.name) + '</strong> &times; ' + item.qty + (item.pieces ? ' <small style="color:#888">(' + escapeHtmlCat(item.pieces) + ')</small>' : '') + '</span>' +
-              '<span>₹' + lineTotal.toLocaleString('en-IN') + '</span>' +
+              '<span><strong>' + escapeHtmlCat(item.name) + '</strong> &times; ' + q + (item.pieces ? ' <small style="color:#888">(' + escapeHtmlCat(item.pieces) + ')</small>' : '') + '</span>' +
+              priceCol +
             '</div>';
   });
 
+  var totalSavings = Math.max(0, totalMrp - totalOfferPrice);
+
   container.innerHTML = html;
-  if (totalEl) {
-    totalEl.textContent = '₹' + totalPrice.toLocaleString('en-IN');
-  }
+  if (totalEl) totalEl.textContent = '₹' + totalOfferPrice.toLocaleString('en-IN');
+  if (mrpEl) mrpEl.textContent = '₹' + totalMrp.toLocaleString('en-IN');
+  if (savingsEl) savingsEl.textContent = '₹' + totalSavings.toLocaleString('en-IN');
+  if (savingsRow) savingsRow.style.display = totalSavings > 0 ? 'flex' : 'none';
 }
 
 function handleOrderSubmit(event) {
@@ -704,21 +778,30 @@ function handleOrderSubmit(event) {
 
   // Calculate totals
   var totalItems = 0;
-  var totalPrice = 0;
+  var totalOfferPrice = 0;
+  var totalMrp = 0;
   var itemsPayload = cart.map(function(item) {
     var q = item.qty || 1;
-    var p = item.price || 0;
+    var offer = Number(item.offerPrice !== undefined ? item.offerPrice : item.price) || 0;
+    var mrp = Number(item.mrp) > 0 ? Number(item.mrp) : offer;
+    var disc = item.discountPercentage || ((mrp > offer && mrp > 0) ? Math.round(((mrp - offer) / mrp) * 100) : 0);
     totalItems += q;
-    totalPrice += (p * q);
+    totalOfferPrice += (offer * q);
+    totalMrp += (mrp * q);
     return {
       code: item.code,
       name: item.name,
-      price: p,
+      mrp: mrp,
+      offerPrice: offer,
+      price: offer,
+      discountPercentage: disc,
       qty: q,
       pieces: item.pieces || '',
       img: item.img || ''
     };
   });
+
+  var totalSavings = Math.max(0, totalMrp - totalOfferPrice);
 
   if (btn) {
     btn.disabled = true;
@@ -738,8 +821,10 @@ function handleOrderSubmit(event) {
       instructions: notes
     },
     items: itemsPayload,
-    subtotal: totalPrice,
-    total: totalPrice,
+    totalMrp: totalMrp,
+    totalSavings: totalSavings,
+    subtotal: totalOfferPrice,
+    total: totalOfferPrice,
     paymentMethod: 'direct_order'
   };
 
@@ -774,7 +859,9 @@ function handleOrderSubmit(event) {
           pincode: cleanPin,
           items: cart,
           totalItems: totalItems,
-          totalPrice: totalPrice,
+          totalPrice: totalOfferPrice,
+          totalMrp: totalMrp,
+          totalSavings: totalSavings,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }).catch(function(e) { console.warn('Firestore backup note:', e); });
       }
@@ -802,7 +889,7 @@ function handleOrderSubmit(event) {
       customerName: name,
       orderDate: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
       productCount: totalItems,
-      totalAmount: totalPrice
+      totalAmount: totalOfferPrice
     });
   })
   .catch(function(err) {

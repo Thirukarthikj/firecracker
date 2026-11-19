@@ -157,7 +157,12 @@ const server = http.createServer(async (req, res) => {
       const orderNumber = generateOrderNumber();
       const itemsList = body.items.map(i => {
         const qty = parseInt(i.qty || i.quantity, 10) || 1;
-        const price = parseFloat(i.price) || 0;
+        const offerPrice = parseFloat(i.offerPrice !== undefined ? i.offerPrice : i.price) || 0;
+        const mrp = parseFloat(i.mrp) > 0 ? parseFloat(i.mrp) : offerPrice;
+        const discountPercentage = (mrp > offerPrice && mrp > 0) ? Math.round(((mrp - offerPrice) / mrp) * 100) : 0;
+        const subtotal = qty * offerPrice;
+        const mrpTotal = qty * mrp;
+        const savings = Math.max(0, mrpTotal - subtotal);
         return {
           product: i.code || i.id || '',
           name: i.name || 'Cracker Item',
@@ -165,15 +170,22 @@ const server = http.createServer(async (req, res) => {
           category: i.category || i.material || '',
           type: i.type || '',
           quantity: qty,
-          price: price,
-          subtotal: qty * price,
+          mrp: mrp,
+          price: offerPrice,
+          offerPrice: offerPrice,
+          discountPercentage: discountPercentage,
+          subtotal: subtotal,
+          mrpTotal: mrpTotal,
+          savings: savings,
           pieces: i.pieces || '',
           image: i.img || i.image || ''
         };
       });
 
+      const totalMrp = itemsList.reduce((acc, it) => acc + it.mrpTotal, 0);
       const calculatedSubtotal = itemsList.reduce((acc, it) => acc + it.subtotal, 0);
-      const finalTotal = parseFloat(body.total || body.subtotal) || calculatedSubtotal;
+      const totalSavings = Math.max(0, totalMrp - calculatedSubtotal);
+      const finalTotal = calculatedSubtotal;
 
       const orderDoc = {
         orderNumber: orderNumber,
@@ -192,8 +204,10 @@ const server = http.createServer(async (req, res) => {
           country: 'India'
         },
         items: itemsList,
+        totalMrp: totalMrp,
+        totalSavings: totalSavings,
         subtotal: calculatedSubtotal,
-        discount: parseFloat(body.discount || 0),
+        discount: totalSavings,
         tax: 0,
         shippingCharge: 0,
         total: finalTotal,

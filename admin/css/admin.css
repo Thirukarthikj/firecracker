@@ -97,6 +97,32 @@ button.danger { background: #b03a3a; }
 .card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .card .actions button { flex: 1; padding: 7px; font-size: 0.8rem; min-width: 70px; }
 
+.card-price-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}
+.card-mrp {
+  text-decoration: line-through;
+  color: #888;
+  font-size: 0.78rem;
+}
+.card-offer {
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 0.95rem;
+}
+.card-discount-badge {
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5);
   display: flex; align-items: center; justify-content: center;

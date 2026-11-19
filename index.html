@@ -1,4 +1,4 @@
-run
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -922,8 +922,22 @@ run
           </div>
         </div>
         <div class="cart-footer" id="cartFooter" style="display:none">
+          <div class="cart-pricing-summary" style="margin-bottom:12px;font-size:0.88rem;background:#fdfbf7;padding:10px 12px;border-radius:6px;border:1px solid #efe8da">
+            <div style="display:flex;justify-content:space-between;color:#777;margin-bottom:4px">
+              <span>Total MRP:</span>
+              <span id="cartTotalMrp" style="text-decoration:line-through">₹0</span>
+            </div>
+            <div id="cartSavingsRow" style="display:flex;justify-content:space-between;color:#16a34a;font-weight:600;margin-bottom:4px">
+              <span>Diwali Savings:</span>
+              <span id="cartTotalSavings">₹0</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;color:#777">
+              <span>Delivery Charge:</span>
+              <span style="color:#16a34a;font-weight:600">FREE</span>
+            </div>
+          </div>
           <div class="cart-total-row">
-            <span>Total Amount:</span>
+            <span>Payable Amount:</span>
             <span id="cartTotalPrice" style="color:#b38029">₹0</span>
           </div>
           <button class="btn-checkout-primary" id="btnProceedCheckout" onclick="goToCheckout()">
@@ -989,8 +1003,22 @@ run
             <div class="checkout-summary-box">
               <h5 class="summary-box-title">Order Summary</h5>
               <div id="checkoutSummaryItems" class="checkout-summary-items"></div>
+              <div class="checkout-pricing-summary" style="border-top:1px dashed #e2d7be;padding-top:8px;margin-top:8px;font-size:0.85rem">
+                <div style="display:flex;justify-content:space-between;color:#777;margin-bottom:4px">
+                  <span>Total MRP:</span>
+                  <span id="checkoutSummaryMrp" style="text-decoration:line-through">₹0</span>
+                </div>
+                <div id="checkoutSavingsRow" style="display:flex;justify-content:space-between;color:#16a34a;font-weight:600;margin-bottom:4px">
+                  <span>Festival Savings:</span>
+                  <span id="checkoutSummarySavings">₹0</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;color:#777;margin-bottom:4px">
+                  <span>Delivery Charge:</span>
+                  <span style="color:#16a34a;font-weight:600">FREE</span>
+                </div>
+              </div>
               <div class="checkout-summary-total">
-                <span>Grand Total:</span>
+                <span>Final Payable Total:</span>
                 <span id="checkoutSummaryTotal" style="color:#b38029;font-weight:700;font-size:1.15rem">₹0</span>
               </div>
             </div>
