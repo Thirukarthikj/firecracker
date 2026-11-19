@@ -7,6 +7,9 @@
   <title>Sivakasi Firecrackers - Admin Dashboard</title>
   <link rel="icon" type="image/png" href="images/tj.png">
   <link rel="stylesheet" href="css/admin.css">
+  <!-- jsPDF & AutoTable for Professional PDF Invoice Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 
 <body>
@@ -28,6 +31,8 @@
     <main>
       <div class="admin-tabs">
         <button class="tab-btn active" id="tabOrders" onclick="switchTab('orders')">📦 Orders (MongoDB)</button>
+        <button class="tab-btn" id="tabCategories" onclick="switchTab('categories')">📁 Categories</button>
+        <button class="tab-btn" id="tabTypes" onclick="switchTab('types')">🏷️ Cracker Types</button>
         <button class="tab-btn" id="tabProducts" onclick="switchTab('products')">Products</button>
         <button class="tab-btn" id="tabEnquiries" onclick="switchTab('enquiries')">Enquiries</button>
         <button class="tab-btn" id="tabNewsletter" onclick="switchTab('newsletter')">Newsletter</button>
@@ -77,6 +82,31 @@
 
         <!-- Orders List Container -->
         <div id="ordersList" class="orders-list"></div>
+      </div>
+
+      <!-- ═══ CATEGORIES MANAGEMENT PANEL ═══ -->
+      <div id="categoriesPanel" style="display:none">
+        <div class="toolbar">
+          <input type="text" id="categorySearchInput" placeholder="Search categories by name or slug..." style="min-width:280px" oninput="renderCategories()">
+          <button onclick="openCategoryModal()">+ Add Category</button>
+          <button class="secondary" onclick="loadCategories()">&#8635; Refresh Categories</button>
+          <span id="categoryCountLabel" style="margin-left:auto;font-size:0.85rem;color:#777"></span>
+        </div>
+        <div id="categoriesList" class="category-grid"></div>
+      </div>
+
+      <!-- ═══ CRACKER TYPES MANAGEMENT PANEL ═══ -->
+      <div id="typesPanel" style="display:none">
+        <div class="toolbar">
+          <input type="text" id="typeSearchInput" placeholder="Search cracker types by name or slug..." style="min-width:260px" oninput="renderTypes()">
+          <select id="typeCategoryFilter" onchange="renderTypes()">
+            <option value="all">All Categories</option>
+          </select>
+          <button onclick="openTypeModal()">+ Add Cracker Type</button>
+          <button class="secondary" onclick="loadTypes()">&#8635; Refresh Types</button>
+          <span id="typeCountLabel" style="margin-left:auto;font-size:0.85rem;color:#777"></span>
+        </div>
+        <div id="typesList" class="type-grid"></div>
       </div>
 
       <div id="productsPanel" style="display:none">
@@ -206,6 +236,66 @@
         <div class="modal-actions">
           <button type="button" class="secondary" onclick="closeForm()">Cancel</button>
           <button type="submit" id="saveBtn">Save Cracker</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ CATEGORY MODAL ═══ -->
+  <div id="categoryModalBackdrop" class="modal-backdrop" style="display:none">
+    <div class="modal">
+      <h2 id="categoryModalTitle">Add Product Category</h2>
+      <form id="categoryForm" onsubmit="return saveCategory(event)">
+        <input type="hidden" id="categoryId">
+        <div class="field">
+          <label>Category Name *</label>
+          <input type="text" id="cat_name" placeholder="e.g. Aerial Fireworks, Sparklers" required oninput="autoSlugCategory()">
+        </div>
+        <div class="field">
+          <label>Category Slug (identifier) *</label>
+          <input type="text" id="cat_slug" placeholder="e.g. aerial, sparklers" required>
+        </div>
+        <div class="field">
+          <label>Description (optional)</label>
+          <textarea id="cat_description" placeholder="Brief description of fireworks in this category..."></textarea>
+        </div>
+        <p class="error-text" id="categoryFormError"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" onclick="closeCategoryModal()">Cancel</button>
+          <button type="submit" id="saveCategoryBtn">Save Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══ CRACKER TYPE MODAL ═══ -->
+  <div id="typeModalBackdrop" class="modal-backdrop" style="display:none">
+    <div class="modal">
+      <h2 id="typeModalTitle">Add Cracker Type</h2>
+      <form id="typeForm" onsubmit="return saveType(event)">
+        <input type="hidden" id="typeId">
+        <div class="field">
+          <label>Cracker Type Name *</label>
+          <input type="text" id="typ_name" placeholder="e.g. Flower Pots / Anaar, Sky Shots" required oninput="autoSlugType()">
+        </div>
+        <div class="field">
+          <label>Type Slug *</label>
+          <input type="text" id="typ_slug" placeholder="e.g. flowerpots, skyshots" required>
+        </div>
+        <div class="field">
+          <label>Parent Category *</label>
+          <select id="typ_category" required>
+            <option value="">Select Category</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Description / Effect Details (optional)</label>
+          <textarea id="typ_description" placeholder="Description of visual and sound effects..."></textarea>
+        </div>
+        <p class="error-text" id="typeFormError"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" onclick="closeTypeModal()">Cancel</button>
+          <button type="submit" id="saveTypeBtn">Save Cracker Type</button>
         </div>
       </form>
     </div>

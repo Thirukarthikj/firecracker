@@ -216,6 +216,55 @@ function filterCatalog(category) {
 }
 
 /* ═══════════════════════════════════════
+   DYNAMIC CATEGORIES & TYPES SYNC
+═══════════════════════════════════════ */
+function loadDynamicCategoriesAndTypes() {
+  fetch('/api/categories')
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success && Array.isArray(data.categories) && data.categories.length > 0) {
+        var matSelect = document.getElementById('materialFilter');
+        if (matSelect) {
+          var curVal = matSelect.value;
+          var html = '<option value="all">All Categories</option>';
+          data.categories.forEach(function (c) {
+            html += '<option value="' + escapeHtmlCat(c.slug) + '">' + escapeHtmlCat(c.name) + '</option>';
+          });
+          matSelect.innerHTML = html;
+          if (curVal && data.categories.some(function (c) { return c.slug === curVal; })) {
+            matSelect.value = curVal;
+          }
+        }
+      }
+    })
+    .catch(function (e) {
+      console.warn('Categories API offline:', e);
+    });
+
+  fetch('/api/types')
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (data.success && Array.isArray(data.types) && data.types.length > 0) {
+        var typSelect = document.getElementById('typeFilter');
+        if (typSelect) {
+          var curVal = typSelect.value;
+          var html = '<option value="all">All Types</option>';
+          data.types.forEach(function (t) {
+            html += '<option value="' + escapeHtmlCat(t.slug) + '">' + escapeHtmlCat(t.name) + '</option>';
+          });
+          typSelect.innerHTML = html;
+          if (curVal && data.types.some(function (t) { return t.slug === curVal; })) {
+            typSelect.value = curVal;
+          }
+        }
+      }
+    })
+    .catch(function (e) {
+      console.warn('Types API offline:', e);
+    });
+}
+
+/* ═══════════════════════════════════════
    ENQUIRY MODAL
 ═══════════════════════════════════════ */
 function openEnquiry(btn, e) {
@@ -658,6 +707,7 @@ window.addEventListener('load', function () {
   initRouting();
   initFadeUps();
   loadCartFromStorage();
+  loadDynamicCategoriesAndTypes();
 });
 
 document.addEventListener('keydown', function (e) {

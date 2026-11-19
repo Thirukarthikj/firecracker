@@ -11,6 +11,30 @@ const DB_NAME = 'firecrackers_ecommerce';
 let mongoClient = null;
 let db = null;
 let ordersCollection = null;
+let categoriesCollection = null;
+let typesCollection = null;
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Sparklers', slug: 'sparklers', description: 'Electric and color sparklers for festive celebrations' },
+  { name: 'Ground Crackers', slug: 'ground', description: 'Chakkars, flowerpots, anaar and spinning wheels' },
+  { name: 'Aerial Fireworks', slug: 'aerial', description: 'Sky shots, multishot cakes, and sky rockets' },
+  { name: 'Sound Crackers & Bombs', slug: 'sound', description: 'Atom bombs, hydro bombs, and classic sound crackers' },
+  { name: 'Gift Boxes & Combos', slug: 'giftboxes', description: 'Pre-packed Diwali family gift boxes and assortments' },
+  { name: 'Kids Special', slug: 'kids', description: 'Snappers, roll caps, serpent eggs and kid-safe novelties' }
+];
+
+const DEFAULT_TYPES = [
+  { name: 'Sparklers / Phuljhadi', slug: 'sparklers', categorySlug: 'sparklers', description: '10cm, 15cm, 30cm and 50cm sparklers' },
+  { name: 'Flower Pots / Anaar', slug: 'flowerpots', categorySlug: 'ground', description: 'Sparkling fountains of light and color' },
+  { name: 'Ground Chakkars / Wheels', slug: 'chakkars', categorySlug: 'ground', description: 'High speed spinning ground wheels' },
+  { name: 'Rockets', slug: 'rockets', categorySlug: 'aerial', description: 'Whistling and sound aerial rockets' },
+  { name: 'Sky Shots / Repeaters', slug: 'skyshots', categorySlug: 'aerial', description: 'Multi-shot aerial repeating cakes' },
+  { name: 'Atom Bombs / Sound', slug: 'bombs', categorySlug: 'sound', description: 'Powerful double and deluxe sound crackers' },
+  { name: 'Garlands / Ladi', slug: 'garlands', categorySlug: 'sound', description: '100, 1000, and 5000 wala festival ladi' },
+  { name: 'Fancy Fountains', slug: 'fountains', categorySlug: 'ground', description: 'Multi-color sparkling cone fountains' },
+  { name: 'Gift Boxes & Hampers', slug: 'giftbox', categorySlug: 'giftboxes', description: 'Family variety assortment hampers' },
+  { name: 'Kids Novelties', slug: 'kids', categorySlug: 'kids', description: 'Pop-pop snappers, magical roll caps and toys' }
+];
 
 async function initMongo() {
   try {
@@ -18,7 +42,23 @@ async function initMongo() {
     await mongoClient.connect();
     db = mongoClient.db(DB_NAME);
     ordersCollection = db.collection('orders');
-    console.log(`Connected to MongoDB: ${DB_NAME} (orders collection ready)`);
+    categoriesCollection = db.collection('categories');
+    typesCollection = db.collection('cracker_types');
+    console.log(`Connected to MongoDB: ${DB_NAME}`);
+
+    // Seed default categories if empty
+    const catCount = await categoriesCollection.countDocuments();
+    if (catCount === 0) {
+      await categoriesCollection.insertMany(DEFAULT_CATEGORIES.map(c => ({ ...c, createdAt: new Date() })));
+      console.log('Seeded default cracker categories into MongoDB');
+    }
+
+    // Seed default cracker types if empty
+    const typeCount = await typesCollection.countDocuments();
+    if (typeCount === 0) {
+      await typesCollection.insertMany(DEFAULT_TYPES.map(t => ({ ...t, createdAt: new Date() })));
+      console.log('Seeded default cracker types into MongoDB');
+    }
   } catch (err) {
     console.error('MongoDB connection error:', err.message);
   }
@@ -76,6 +116,12 @@ function generateOrderNumber() {
   return `ORD-${dateStr}-${rand}`;
 }
 
+function generateInvoiceNumber() {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `INV-${dateStr}-${rand}`;
+}
+
 const server = http.createServer(async (req, res) => {
   // CORS Preflight
   if (req.method === 'OPTIONS') {
@@ -91,7 +137,7 @@ const server = http.createServer(async (req, res) => {
   const pathname = urlObj.pathname;
 
   // ═══════════════════════════════════════════
-  // MONGO DB API ROUTES
+  // MONGO DB ORDERS API
   // ═══════════════════════════════════════════
 
   // POST /api/orders -> Save new order in MongoDB
@@ -111,6 +157,8 @@ const server = http.createServer(async (req, res) => {
       const orderNumber = generateOrderNumber();
       const orderDoc = {
         orderNumber: orderNumber,
+        invoiceNumber: null, // Generated upon order confirmation
+        invoiceDate: null,
         shippingAddress: {
           name: body.customer.name.trim(),
           phone: body.customer.phone.trim(),
@@ -125,6 +173,8 @@ const server = http.createServer(async (req, res) => {
           product: i.code || '',
           name: i.name,
           sku: i.code || '',
+          category: i.category || i.material || '',
+          type: i.type || '',
           quantity: parseInt(i.qty, 10) || 1,
           price: parseFloat(i.price) || 0,
           pieces: i.pieces || '',
@@ -138,6 +188,13 @@ const server = http.createServer(async (req, res) => {
         status: 'pending',
         paymentStatus: 'pending',
         paymentMethod: body.paymentMethod || 'whatsapp',
+        companyDetails: {
+          name: 'Sivakasi Firecrackers',
+          address: 'Main Road, Sivakasi – 626 123, Virudhunagar Dist., Tamil Nadu, India',
+          phone: '+91 9342553805',
+          email: 'sivakasifirecrackers@gmail.com',
+          gstin: '33AAACF1234F1Z5'
+        },
         notes: body.notes || '',
         createdAt: new Date(),
         updatedAt: new Date()
@@ -156,7 +213,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // GET /api/orders -> List orders (filter by status or search)
+  // GET /api/orders -> List orders
   if (pathname === '/api/orders' && req.method === 'GET') {
     if (!ordersCollection) {
       return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
@@ -174,6 +231,7 @@ const server = http.createServer(async (req, res) => {
         const q = search.trim();
         filter.$or = [
           { orderNumber: { $regex: q, $options: 'i' } },
+          { invoiceNumber: { $regex: q, $options: 'i' } },
           { 'shippingAddress.name': { $regex: q, $options: 'i' } },
           { 'shippingAddress.phone': { $regex: q, $options: 'i' } },
           { 'shippingAddress.city': { $regex: q, $options: 'i' } }
@@ -193,7 +251,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // POST /api/orders/update-status -> Change order status
+  // POST /api/orders/update-status -> Change order status & generate Invoice on confirmation
   if (pathname === '/api/orders/update-status' && req.method === 'POST') {
     if (!ordersCollection) {
       return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
@@ -212,23 +270,78 @@ const server = http.createServer(async (req, res) => {
         filter = { orderNumber: id };
       }
 
-      const updateResult = await ordersCollection.updateOne(
-        filter,
-        {
-          $set: {
-            status: status.toLowerCase(),
-            updatedAt: new Date()
-          }
-        }
-      );
+      const existingOrder = await ordersCollection.findOne(filter);
+      if (!existingOrder) {
+        return sendJson(res, 404, { success: false, error: 'Order not found' });
+      }
+
+      const updateFields = {
+        status: status.toLowerCase(),
+        updatedAt: new Date()
+      };
+
+      // Automatic PDF Invoice generation: when status becomes confirmed, assign unique invoice number once
+      let invoiceNumber = existingOrder.invoiceNumber;
+      let invoiceDate = existingOrder.invoiceDate;
+      if (status.toLowerCase() === 'confirmed' && !invoiceNumber) {
+        invoiceNumber = generateInvoiceNumber();
+        invoiceDate = new Date();
+        updateFields.invoiceNumber = invoiceNumber;
+        updateFields.invoiceDate = invoiceDate;
+        updateFields.paymentStatus = 'confirmed';
+      }
+
+      await ordersCollection.updateOne(filter, { $set: updateFields });
 
       return sendJson(res, 200, {
         success: true,
-        matched: updateResult.matchedCount,
-        modified: updateResult.modifiedCount
+        invoiceNumber: invoiceNumber || null,
+        invoiceDate: invoiceDate || null,
+        status: status.toLowerCase()
       });
     } catch (err) {
       console.error('Error updating status:', err);
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/orders/generate-invoice -> Explicitly create or retrieve invoice for an order
+  if (pathname === '/api/orders/generate-invoice' && req.method === 'POST') {
+    if (!ordersCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { id } = body;
+      if (!id) return sendJson(res, 400, { success: false, error: 'Missing order id' });
+
+      let filter;
+      try {
+        filter = { _id: new ObjectId(id) };
+      } catch (e) {
+        filter = { orderNumber: id };
+      }
+
+      const order = await ordersCollection.findOne(filter);
+      if (!order) return sendJson(res, 404, { success: false, error: 'Order not found' });
+
+      let invoiceNumber = order.invoiceNumber;
+      let invoiceDate = order.invoiceDate;
+      if (!invoiceNumber) {
+        invoiceNumber = generateInvoiceNumber();
+        invoiceDate = new Date();
+        await ordersCollection.updateOne(filter, {
+          $set: { invoiceNumber, invoiceDate, updatedAt: new Date() }
+        });
+      }
+
+      return sendJson(res, 200, {
+        success: true,
+        invoiceNumber,
+        invoiceDate,
+        order: { ...order, invoiceNumber, invoiceDate }
+      });
+    } catch (err) {
       return sendJson(res, 500, { success: false, error: err.message });
     }
   }
@@ -241,9 +354,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await parseBody(req);
       const { id } = body;
-      if (!id) {
-        return sendJson(res, 400, { success: false, error: 'Missing id' });
-      }
+      if (!id) return sendJson(res, 400, { success: false, error: 'Missing id' });
 
       let filter;
       try {
@@ -302,6 +413,240 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // CATEGORIES API
+  // ═══════════════════════════════════════════
+
+  // GET /api/categories -> List all categories
+  if (pathname === '/api/categories' && req.method === 'GET') {
+    if (!categoriesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const categories = await categoriesCollection.find({}).sort({ name: 1 }).toArray();
+      return sendJson(res, 200, { success: true, count: categories.length, categories });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/categories -> Add category
+  if (pathname === '/api/categories' && req.method === 'POST') {
+    if (!categoriesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const name = (body.name || '').trim();
+      let slug = (body.slug || '').trim().toLowerCase();
+      const description = (body.description || '').trim();
+
+      if (!name) return sendJson(res, 400, { success: false, error: 'Category name is required' });
+      if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      // Prevent duplicate category name or slug
+      const existing = await categoriesCollection.findOne({
+        $or: [
+          { name: { $regex: '^' + name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', $options: 'i' } },
+          { slug: slug }
+        ]
+      });
+      if (existing) {
+        return sendJson(res, 409, { success: false, error: 'Category with this name or slug already exists' });
+      }
+
+      const doc = { name, slug, description, createdAt: new Date(), updatedAt: new Date() };
+      const result = await categoriesCollection.insertOne(doc);
+      return sendJson(res, 201, { success: true, category: { ...doc, _id: result.insertedId } });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/categories/update -> Edit category
+  if (pathname === '/api/categories/update' && req.method === 'POST') {
+    if (!categoriesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { id, name, slug, description } = body;
+      if (!id || !name) return sendJson(res, 400, { success: false, error: 'Category ID and name are required' });
+
+      let filter;
+      try { filter = { _id: new ObjectId(id) }; } catch (e) { filter = { slug: id }; }
+
+      const cleanSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')).trim();
+
+      // Check duplicates other than self
+      const dup = await categoriesCollection.findOne({
+        _id: { $ne: filter._id },
+        $or: [
+          { name: { $regex: '^' + name.trim().replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', $options: 'i' } },
+          { slug: cleanSlug }
+        ]
+      });
+      if (dup) {
+        return sendJson(res, 409, { success: false, error: 'Another category with this name or slug already exists' });
+      }
+
+      await categoriesCollection.updateOne(filter, {
+        $set: {
+          name: name.trim(),
+          slug: cleanSlug,
+          description: (description || '').trim(),
+          updatedAt: new Date()
+        }
+      });
+
+      return sendJson(res, 200, { success: true });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/categories/delete -> Delete category
+  if (pathname === '/api/categories/delete' && req.method === 'POST') {
+    if (!categoriesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { id, slug } = body;
+      let filter;
+      if (id) {
+        try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { slug: id }; }
+      } else if (slug) {
+        filter = { slug: slug };
+      } else {
+        return sendJson(res, 400, { success: false, error: 'Missing category id or slug' });
+      }
+
+      const del = await categoriesCollection.deleteOne(filter);
+      return sendJson(res, 200, { success: true, deleted: del.deletedCount });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // CRACKER TYPES API
+  // ═══════════════════════════════════════════
+
+  // GET /api/types -> List all cracker types
+  if (pathname === '/api/types' && req.method === 'GET') {
+    if (!typesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const types = await typesCollection.find({}).sort({ name: 1 }).toArray();
+      return sendJson(res, 200, { success: true, count: types.length, types });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/types -> Add cracker type
+  if (pathname === '/api/types' && req.method === 'POST') {
+    if (!typesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const name = (body.name || '').trim();
+      let slug = (body.slug || '').trim().toLowerCase();
+      const categorySlug = (body.categorySlug || body.category || '').trim();
+      const description = (body.description || '').trim();
+
+      if (!name) return sendJson(res, 400, { success: false, error: 'Cracker type name is required' });
+      if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      // Prevent duplicate type name or slug
+      const existing = await typesCollection.findOne({
+        $or: [
+          { name: { $regex: '^' + name.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', $options: 'i' } },
+          { slug: slug }
+        ]
+      });
+      if (existing) {
+        return sendJson(res, 409, { success: false, error: 'Cracker type with this name or slug already exists' });
+      }
+
+      const doc = { name, slug, categorySlug, description, createdAt: new Date(), updatedAt: new Date() };
+      const result = await typesCollection.insertOne(doc);
+      return sendJson(res, 201, { success: true, type: { ...doc, _id: result.insertedId } });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/types/update -> Edit cracker type
+  if (pathname === '/api/types/update' && req.method === 'POST') {
+    if (!typesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { id, name, slug, categorySlug, description } = body;
+      if (!id || !name) return sendJson(res, 400, { success: false, error: 'Type ID and name are required' });
+
+      let filter;
+      try { filter = { _id: new ObjectId(id) }; } catch (e) { filter = { slug: id }; }
+
+      const cleanSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')).trim();
+
+      // Check duplicate
+      const dup = await typesCollection.findOne({
+        _id: { $ne: filter._id },
+        $or: [
+          { name: { $regex: '^' + name.trim().replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', $options: 'i' } },
+          { slug: cleanSlug }
+        ]
+      });
+      if (dup) {
+        return sendJson(res, 409, { success: false, error: 'Another cracker type with this name or slug already exists' });
+      }
+
+      await typesCollection.updateOne(filter, {
+        $set: {
+          name: name.trim(),
+          slug: cleanSlug,
+          categorySlug: (categorySlug || '').trim(),
+          description: (description || '').trim(),
+          updatedAt: new Date()
+        }
+      });
+
+      return sendJson(res, 200, { success: true });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/types/delete -> Delete cracker type
+  if (pathname === '/api/types/delete' && req.method === 'POST') {
+    if (!typesCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { id, slug } = body;
+      let filter;
+      if (id) {
+        try { filter = { _id: new ObjectId(id) }; } catch(e) { filter = { slug: id }; }
+      } else if (slug) {
+        filter = { slug: slug };
+      } else {
+        return sendJson(res, 400, { success: false, error: 'Missing type id or slug' });
+      }
+
+      const del = await typesCollection.deleteOne(filter);
+      return sendJson(res, 200, { success: true, deleted: del.deletedCount });
+    } catch (err) {
       return sendJson(res, 500, { success: false, error: err.message });
     }
   }

@@ -7,6 +7,8 @@
 
 let products = [];
 let orders = [];
+let categories = [];
+let crackerTypes = [];
 let enquiries = [];
 let newsletterEntries = [];
 let currentUploadedImage = null; // { url, publicId } for the pending form image
@@ -41,6 +43,8 @@ auth.onAuthStateChanged((user) => {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display = 'block';
     loadOrders();
+    loadCategories();
+    loadTypes();
     loadProducts();
     loadEnquiries();
     loadNewsletter();
@@ -54,7 +58,7 @@ auth.onAuthStateChanged((user) => {
    TABS
 ═══════════════════════════════════════ */
 function switchTab(tab) {
-  const tabs = ['orders', 'products', 'enquiries', 'newsletter'];
+  const tabs = ['orders', 'categories', 'types', 'products', 'enquiries', 'newsletter'];
   tabs.forEach((t) => {
     const panel = document.getElementById(t + 'Panel');
     const tabBtn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -62,6 +66,8 @@ function switchTab(tab) {
     if (tabBtn) tabBtn.classList.toggle('active', t === tab);
   });
   if (tab === 'orders') loadOrders();
+  if (tab === 'categories') loadCategories();
+  if (tab === 'types') loadTypes();
   if (tab === 'products') renderGrid();
   if (tab === 'enquiries') renderEnquiries();
   if (tab === 'newsletter') renderNewsletter();
@@ -541,9 +547,10 @@ function renderOrders() {
     return `
       <div class="order-card" id="order-${idStr}">
         <div class="order-card-header">
-          <div>
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
             <span class="order-num">#${escapeHtml(order.orderNumber || 'ORD-UNKNOWN')}</span>
-            <span class="badge-status ${statusClass}" style="margin-left:10px">${escapeHtml(currentStatus.toUpperCase())}</span>
+            ${order.invoiceNumber ? `<span class="invoice-badge">📄 ${escapeHtml(order.invoiceNumber)}</span>` : ''}
+            <span class="badge-status ${statusClass}">${escapeHtml(currentStatus.toUpperCase())}</span>
           </div>
           <div class="order-date">${orderDate}</div>
         </div>
@@ -554,6 +561,7 @@ function renderOrders() {
               <div class="cust-detail">📞 <strong>Phone:</strong> ${escapeHtml(cust.phone || 'N/A')}</div>
               <div class="cust-detail">📍 <strong>City / Address:</strong> ${escapeHtml(cust.city || cust.addressLine1 || 'N/A')}</div>
               <div class="cust-detail">💳 <strong>Payment:</strong> ${(order.paymentMethod || 'whatsapp').toUpperCase()} &middot; <span style="text-transform:capitalize">${escapeHtml(order.paymentStatus || 'pending')}</span></div>
+              ${order.invoiceNumber ? `<div class="cust-detail" style="color:#0369a1;font-weight:600">📄 <strong>Invoice:</strong> ${escapeHtml(order.invoiceNumber)}</div>` : ''}
             </div>
             <div>
               ${cleanPhone ? `<a href="${waLink}" target="_blank" class="btn-wa-chat">💬 Chat on WhatsApp</a>` : ''}
@@ -581,7 +589,9 @@ function renderOrders() {
               <span class="order-total-amount">₹${(order.total || order.subtotal || 0).toLocaleString('en-IN')}</span>
             </div>
             <div class="order-actions-block">
-              <label style="font-size:0.8rem;color:#666">Status:</label>
+              <button type="button" class="btn-invoice-pdf" onclick="downloadInvoicePDF('${idStr}')" title="Download Official PDF Invoice">📄 Download PDF</button>
+              <button type="button" class="btn-invoice-wa" onclick="shareInvoiceWhatsApp('${idStr}')" title="Share Invoice via WhatsApp">💬 Share via WhatsApp</button>
+              <label style="font-size:0.8rem;color:#666;margin-left:4px">Status:</label>
               <select class="status-select" onchange="updateOrderStatus('${idStr}', this.value)">
                 <option value="pending" ${currentStatus === 'pending' ? 'selected' : ''}>Pending</option>
                 <option value="confirmed" ${currentStatus === 'confirmed' ? 'selected' : ''}>Confirmed</option>
@@ -608,7 +618,12 @@ async function updateOrderStatus(orderId, newStatus) {
     const data = await res.json();
     if (data.success) {
       const ord = orders.find((o) => (o._id === orderId || o.orderNumber === orderId));
-      if (ord) ord.status = newStatus;
+      if (ord) {
+        ord.status = newStatus;
+        if (data.invoiceNumber) ord.invoiceNumber = data.invoiceNumber;
+        if (data.invoiceDate) ord.invoiceDate = data.invoiceDate;
+        if (newStatus === 'confirmed') ord.paymentStatus = 'confirmed';
+      }
       renderOrders();
       // Reload stats
       fetch('/api/orders/stats')
@@ -624,6 +639,10 @@ async function updateOrderStatus(orderId, newStatus) {
           }
         })
         .catch((err) => console.warn(err));
+
+      if (newStatus === 'confirmed' && data.invoiceNumber) {
+        alert(`Order confirmed!\nUnique Invoice #${data.invoiceNumber} has been generated automatically for this order.\nYou can now download the PDF invoice or share it with the customer via WhatsApp.`);
+      }
     } else {
       alert('Failed to update status: ' + (data.error || 'Server error'));
     }
@@ -707,3 +726,782 @@ async function deleteAllEnquiries() {
     alert('Error deleting enquiries: ' + err.message);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTOMATIC PDF INVOICE GENERATION
+   Uses jsPDF & jsPDF-AutoTable
+═══════════════════════════════════════════════════════════════ */
+async function ensureInvoiceNumber(order) {
+  if (order.invoiceNumber) return order.invoiceNumber;
+  try {
+    const id = order._id || order.orderNumber;
+    const res = await fetch('/api/orders/generate-invoice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (data.success && data.order) {
+      order.invoiceNumber = data.order.invoiceNumber;
+      order.invoiceDate = data.order.invoiceDate;
+      renderOrders();
+      return order.invoiceNumber;
+    }
+  } catch (e) {
+    console.warn('Could not generate invoice on server:', e);
+  }
+  // Fallback client-side unique invoice number if offline
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  order.invoiceNumber = `INV-${dateStr}-${rand}`;
+  order.invoiceDate = new Date();
+  return order.invoiceNumber;
+}
+
+async function downloadInvoicePDF(orderId) {
+  const order = orders.find((o) => (o._id === orderId || o.orderNumber === orderId));
+  if (!order) {
+    alert('Order not found.');
+    return null;
+  }
+
+  // Ensure invoice number exists in database
+  await ensureInvoiceNumber(order);
+
+  const jsPdfLib = (window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : window.jsPDF;
+  if (!jsPdfLib) {
+    alert('PDF generator library is still loading. Please check your internet connection or try again in a few moments.');
+    return null;
+  }
+
+  const doc = new jsPdfLib({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const cust = order.shippingAddress || {};
+  const orderDate = order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric'
+  }) : new Date().toLocaleDateString('en-IN');
+  const invoiceDate = order.invoiceDate ? new Date(order.invoiceDate).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric'
+  }) : orderDate;
+
+  // Header background banner
+  doc.setFillColor(26, 18, 8); // #1a1208
+  doc.rect(0, 0, 210, 38, 'F');
+
+  // Gold accent bar
+  doc.setFillColor(184, 147, 58); // #b8933a
+  doc.rect(0, 38, 210, 2, 'F');
+
+  // Company Branding Header
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('SIVAKASI FIRECRACKERS', 14, 15);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(220, 215, 205);
+  doc.text('Direct from Sivakasi Factory - Premium Festive Fireworks & Crackers', 14, 21);
+  doc.text('Main Road, Sivakasi, Virudhunagar Dist, Tamil Nadu - 626123 | Phone: +91 9342553805', 14, 26);
+  doc.text('Email: sales@sivakasifirecrackers.com | GSTIN: 33AAACF8124P1Z4 | Lic: W/TN/DIS/04/2024', 14, 31);
+
+  // Invoice title badge right-aligned
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(235, 190, 80);
+  doc.text('TAX INVOICE', 196, 17, { align: 'right' });
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text('ORIGINAL FOR RECIPIENT', 196, 23, { align: 'right' });
+
+  // 2-Column Info Blocks
+  const boxTop = 46;
+  const boxHeight = 36;
+  const colWidth = 88;
+
+  // Left Box: Billed / Shipped To
+  doc.setFillColor(248, 246, 240);
+  doc.setDrawColor(226, 221, 210);
+  doc.roundedRect(14, boxTop, colWidth, boxHeight, 2, 2, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(184, 147, 58);
+  doc.text('BILLED & DELIVERED TO:', 18, boxTop + 7);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(26, 18, 8);
+  doc.text(cust.name || 'Valued Customer', 18, boxTop + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(70, 70, 70);
+  doc.text(`Phone: ${cust.phone || 'N/A'}`, 18, boxTop + 18);
+  doc.text(`City / State: ${cust.city || 'Sivakasi'}, ${cust.state || 'Tamil Nadu'}`, 18, boxTop + 23);
+  doc.text(`Address: ${cust.addressLine1 || cust.city || 'Standard Delivery Address'}`, 18, boxTop + 28, { maxWidth: 80 });
+
+  // Right Box: Invoice Details
+  const rightX = 108;
+  doc.setFillColor(248, 246, 240);
+  doc.roundedRect(rightX, boxTop, colWidth, boxHeight, 2, 2, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(184, 147, 58);
+  doc.text('INVOICE INFORMATION:', rightX + 4, boxTop + 7);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(70, 70, 70);
+
+  doc.text('Invoice No:', rightX + 4, boxTop + 13);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(26, 18, 8);
+  doc.text(order.invoiceNumber || 'INV-PENDING', rightX + 32, boxTop + 13);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(70, 70, 70);
+  doc.text('Invoice Date:', rightX + 4, boxTop + 18);
+  doc.text(invoiceDate, rightX + 32, boxTop + 18);
+
+  doc.text('Order ID:', rightX + 4, boxTop + 23);
+  doc.text(`#${order.orderNumber || '—'}`, rightX + 32, boxTop + 23);
+
+  doc.text('Payment Mode:', rightX + 4, boxTop + 28);
+  doc.text(`${(order.paymentMethod || 'WhatsApp / COD').toUpperCase()}`, rightX + 32, boxTop + 28);
+
+  doc.text('Payment Status:', rightX + 4, boxTop + 33);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(order.paymentStatus === 'confirmed' ? 22 : 180, order.paymentStatus === 'confirmed' ? 101 : 100, 20);
+  doc.text((order.paymentStatus || 'Confirmed').toUpperCase(), rightX + 32, boxTop + 33);
+
+  // Table of Items
+  const items = order.items || [];
+  const tableRows = items.map((item, index) => {
+    const qty = Number(item.quantity) || 1;
+    const price = Number(item.price) || 0;
+    const total = qty * price;
+    const categoryName = item.category || item.material || 'Firecrackers';
+    return [
+      String(index + 1),
+      `${item.name || 'Cracker Item'}${item.sku ? ` (${item.sku})` : ''}`,
+      categoryName,
+      item.pieces || '1 Box',
+      String(qty),
+      `Rs. ${price.toLocaleString('en-IN')}`,
+      `Rs. ${total.toLocaleString('en-IN')}`
+    ];
+  });
+
+  if (doc.autoTable) {
+    doc.autoTable({
+      startY: 88,
+      head: [['#', 'Item Description', 'Category', 'Packing', 'Qty', 'Unit Rate', 'Amount']],
+      body: tableRows,
+      theme: 'grid',
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 3,
+        textColor: [30, 30, 30],
+        lineColor: [226, 221, 210]
+      },
+      headStyles: {
+        fillColor: [26, 18, 8],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 62 },
+        2: { cellWidth: 32 },
+        3: { cellWidth: 26 },
+        4: { cellWidth: 14, halign: 'center' },
+        5: { cellWidth: 24, halign: 'right' },
+        6: { cellWidth: 24, halign: 'right' }
+      },
+      alternateRowStyles: {
+        fillColor: [252, 250, 247]
+      }
+    });
+  }
+
+  const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 6 : 140;
+
+  // Financial Summary Block
+  const subtotal = Number(order.subtotal || order.total) || items.reduce((acc, it) => acc + (Number(it.price) || 0) * (Number(it.quantity) || 1), 0);
+  const discount = Number(order.discount) || 0;
+  const grandTotal = Number(order.total || subtotal - discount);
+
+  const sumBoxX = 118;
+  const sumBoxY = finalY;
+  const sumBoxW = 78;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(226, 221, 210);
+  doc.roundedRect(sumBoxX, sumBoxY, sumBoxW, 36, 2, 2, 'FD');
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  doc.text('Subtotal:', sumBoxX + 6, sumBoxY + 8);
+  doc.text(`Rs. ${subtotal.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 8, { align: 'right' });
+
+  doc.text('Diwali Festival Discount:', sumBoxX + 6, sumBoxY + 14);
+  doc.text(`- Rs. ${discount.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 14, { align: 'right' });
+
+  doc.text('Packaging & Delivery:', sumBoxX + 6, sumBoxY + 20);
+  doc.setTextColor(22, 101, 52);
+  doc.text('FREE (Diwali Special)', sumBoxX + sumBoxW - 6, sumBoxY + 20, { align: 'right' });
+
+  // Grand Total line
+  doc.setDrawColor(184, 147, 58);
+  doc.line(sumBoxX + 4, sumBoxY + 24, sumBoxX + sumBoxW - 4, sumBoxY + 24);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(184, 147, 58);
+  doc.text('Grand Total:', sumBoxX + 6, sumBoxY + 31);
+  doc.text(`Rs. ${grandTotal.toLocaleString('en-IN')}`, sumBoxX + sumBoxW - 6, sumBoxY + 31, { align: 'right' });
+
+  // Left Notes & Safety Guidelines Block
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(26, 18, 8);
+  doc.text('Terms, Conditions & Safety Guidelines:', 14, sumBoxY + 8);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(90, 90, 90);
+  const notes = [
+    '• 100% Genuine Sivakasi Green Crackers certified with reduced emissions.',
+    '• Light fireworks outdoors only under adult supervision.',
+    '• Keep a bucket of water and sand nearby for emergency safety.',
+    '• Store crackers in a cool, dry place away from sparks or heat sources.',
+    '• Goods once dispatched cannot be returned or exchanged due to safety norms.'
+  ];
+  notes.forEach((n, idx) => {
+    doc.text(n, 14, sumBoxY + 14 + (idx * 4.5));
+  });
+
+  // Authorized Signatory
+  const signY = sumBoxY + 48;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text('For Sivakasi Firecrackers, Sivakasi', 196, signY, { align: 'right' });
+  doc.setFont('helvetica', 'bold');
+  doc.text('Authorized Signatory', 196, signY + 10, { align: 'right' });
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7);
+  doc.text('(Digitally Generated Invoice - No Physical Signature Required)', 196, signY + 14, { align: 'right' });
+
+  // Bottom Footer Ribbon
+  doc.setFillColor(26, 18, 8);
+  doc.rect(0, 285, 210, 12, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(230, 225, 215);
+  doc.text('Wishing you and your family a safe, prosperous, and sparkling Diwali! Thank you for your business.', 105, 292, { align: 'center' });
+
+  const filename = `Invoice_${order.invoiceNumber || order.orderNumber}.pdf`;
+  doc.save(filename);
+
+  return { doc, filename, order };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   WHATSAPP INVOICE SHARING
+═══════════════════════════════════════════════════════════════ */
+async function shareInvoiceWhatsApp(orderId) {
+  const order = orders.find((o) => (o._id === orderId || o.orderNumber === orderId));
+  if (!order) {
+    alert('Order not found.');
+    return;
+  }
+
+  // Ensure invoice is generated and download PDF
+  const result = await downloadInvoicePDF(orderId);
+  const cust = order.shippingAddress || {};
+  const rawPhone = (cust.phone || '').replace(/[^0-9]/g, '');
+  const cleanPhone = rawPhone.length === 10 ? '91' + rawPhone : rawPhone;
+
+  if (!cleanPhone) {
+    alert('No valid phone number found for this customer. Please check the customer phone field.');
+    return;
+  }
+
+  const items = order.items || [];
+  const itemsText = items.map((it, idx) => {
+    const q = it.quantity || 1;
+    const p = it.price || 0;
+    return `${idx + 1}. *${it.name || 'Cracker'}* (${it.pieces || 'Pack'}) x ${q} = ₹${(p * q).toLocaleString('en-IN')}`;
+  }).join('\n');
+
+  const grandTotal = Number(order.total || order.subtotal) || 0;
+  const invoiceNum = order.invoiceNumber || 'INV-PENDING';
+
+  const msg = [
+    `🎆 *SIVAKASI FIRECRACKERS - ORDER INVOICE* 🎆`,
+    `----------------------------------------`,
+    `*Invoice No:* ${invoiceNum}`,
+    `*Order ID:* #${order.orderNumber || ''}`,
+    `*Order Date:* ${new Date(order.createdAt || Date.now()).toLocaleDateString('en-IN')}`,
+    ``,
+    `*Customer Details:*`,
+    `• *Name:* ${cust.name || 'Valued Customer'}`,
+    `• *Phone:* ${cust.phone || 'N/A'}`,
+    `• *Delivery Location:* ${cust.city || cust.addressLine1 || 'Tamil Nadu'}`,
+    ``,
+    `*Items Ordered:*`,
+    itemsText,
+    ``,
+    `*Grand Total:* ₹${grandTotal.toLocaleString('en-IN')}`,
+    `*Payment Mode:* ${(order.paymentMethod || 'WhatsApp / COD').toUpperCase()}`,
+    `*Payment Status:* ${(order.paymentStatus || 'Confirmed').toUpperCase()}`,
+    `*Order Status:* ${(order.status || 'Confirmed').toUpperCase()}`,
+    `----------------------------------------`,
+    `✨ *Thank you for celebrating with Sivakasi Firecrackers!*`,
+    `📄 Your official PDF invoice (*${result ? result.filename : 'Invoice.pdf'}*) has been generated. We have attached the invoice document copy for your reference!`,
+    ``,
+    `📞 Sivakasi Factory Helpline: +91 9342553805`,
+    `🌐 sivakasifirecrackers.com`
+  ].join('\n');
+
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+
+  setTimeout(() => {
+    alert(`✅ Invoice PDF has been downloaded to your device!\n💬 WhatsApp chat opened for ${cust.name || 'Customer'} (${cleanPhone}).\n\n📎 Please attach the downloaded PDF invoice directly into the WhatsApp chat.`);
+  }, 400);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CATEGORY MANAGEMENT
+═══════════════════════════════════════════════════════════════ */
+async function loadCategories() {
+  try {
+    const res = await fetch('/api/categories');
+    const data = await res.json();
+    if (data.success && Array.isArray(data.categories)) {
+      categories = data.categories;
+      renderCategories();
+      populateCategoryAndTypeSelects();
+    }
+  } catch (err) {
+    console.warn('Could not load categories from /api/categories:', err);
+  }
+}
+
+function renderCategories() {
+  const container = document.getElementById('categoriesList');
+  if (!container) return;
+  const searchInput = document.getElementById('categorySearchInput');
+  const search = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  const label = document.getElementById('categoryCountLabel');
+
+  const filtered = categories.filter((c) => {
+    return !search || (c.name || '').toLowerCase().includes(search) || (c.slug || '').toLowerCase().includes(search);
+  });
+
+  if (label) label.textContent = `${filtered.length} of ${categories.length} categories`;
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty" style="grid-column:1/-1">No categories found. Click "+ Add Category" to create one.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map((c) => {
+    const catId = c._id || c.slug;
+    const typeCount = crackerTypes.filter((t) => t.categorySlug === c.slug).length;
+    return `
+      <div class="item-manage-card" id="cat-card-${catId}">
+        <div>
+          <div class="item-manage-head">
+            <h3 class="item-manage-title">📁 ${escapeHtml(c.name)}</h3>
+            <span class="item-slug-pill">${escapeHtml(c.slug)}</span>
+          </div>
+          <span class="item-category-pill">${typeCount} Cracker Types</span>
+          <p class="item-desc">${escapeHtml(c.description || 'No description provided.')}</p>
+        </div>
+        <div class="item-actions">
+          <button type="button" class="secondary" onclick="openCategoryModal('${catId}')">✏️ Edit</button>
+          <button type="button" class="danger" onclick="deleteCategory('${catId}', '${escapeHtml(c.name)}')">🗑 Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function autoSlugCategory() {
+  const name = document.getElementById('cat_name').value;
+  const slugInput = document.getElementById('cat_slug');
+  if (slugInput && !slugInput.dataset.manual) {
+    slugInput.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  }
+}
+
+function openCategoryModal(catId) {
+  const modal = document.getElementById('categoryModalBackdrop');
+  const title = document.getElementById('categoryModalTitle');
+  const form = document.getElementById('categoryForm');
+  const idInput = document.getElementById('categoryId');
+  const nameInput = document.getElementById('cat_name');
+  const slugInput = document.getElementById('cat_slug');
+  const descInput = document.getElementById('cat_description');
+  const errEl = document.getElementById('categoryFormError');
+
+  errEl.textContent = '';
+  form.reset();
+  slugInput.dataset.manual = '';
+
+  if (catId) {
+    const cat = categories.find((c) => c._id === catId || c.slug === catId);
+    if (cat) {
+      title.textContent = 'Edit Product Category';
+      idInput.value = cat._id || cat.slug;
+      nameInput.value = cat.name || '';
+      slugInput.value = cat.slug || '';
+      slugInput.dataset.manual = 'true';
+      descInput.value = cat.description || '';
+    }
+  } else {
+    title.textContent = 'Add Product Category';
+    idInput.value = '';
+  }
+  modal.style.display = 'flex';
+}
+
+function closeCategoryModal() {
+  const modal = document.getElementById('categoryModalBackdrop');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveCategory(event) {
+  event.preventDefault();
+  const id = document.getElementById('categoryId').value.trim();
+  const name = document.getElementById('cat_name').value.trim();
+  const slug = document.getElementById('cat_slug').value.trim().toLowerCase();
+  const description = document.getElementById('cat_description').value.trim();
+  const errEl = document.getElementById('categoryFormError');
+  const btn = document.getElementById('saveCategoryBtn');
+
+  if (!name || !slug) {
+    errEl.textContent = 'Category name and slug are required.';
+    return false;
+  }
+
+  // Prevent duplicate category name client-side
+  const dup = categories.find((c) => (c._id !== id && c.slug !== id) && (
+    (c.name || '').toLowerCase() === name.toLowerCase() || (c.slug || '').toLowerCase() === slug
+  ));
+  if (dup) {
+    errEl.textContent = `A category with name "${name}" or slug "${slug}" already exists.`;
+    return false;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const endpoint = id ? '/api/categories/update' : '/api/categories';
+    const payload = id ? { id, name, slug, description } : { name, slug, description };
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeCategoryModal();
+      await loadCategories();
+      alert(`Category "${name}" saved successfully!`);
+    } else {
+      errEl.textContent = data.error || 'Failed to save category.';
+    }
+  } catch (err) {
+    errEl.textContent = err.message || 'Server error while saving category.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Category';
+  }
+  return false;
+}
+
+async function deleteCategory(id, name) {
+  if (!confirm(`Are you sure you want to delete category "${name}"?\nCracker types assigned to this category should be reassigned.`)) {
+    return;
+  }
+  try {
+    const res = await fetch('/api/categories/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (data.success) {
+      await loadCategories();
+      alert(`Category "${name}" deleted.`);
+    } else {
+      alert('Failed to delete category: ' + (data.error || 'Server error'));
+    }
+  } catch (err) {
+    alert('Error deleting category: ' + err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CRACKER TYPE MANAGEMENT
+═══════════════════════════════════════════════════════════════ */
+async function loadTypes() {
+  try {
+    const res = await fetch('/api/types');
+    const data = await res.json();
+    if (data.success && Array.isArray(data.types)) {
+      crackerTypes = data.types;
+      renderTypes();
+      populateCategoryAndTypeSelects();
+    }
+  } catch (err) {
+    console.warn('Could not load cracker types from /api/types:', err);
+  }
+}
+
+function renderTypes() {
+  const container = document.getElementById('typesList');
+  if (!container) return;
+  const searchInput = document.getElementById('typeSearchInput');
+  const search = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  const catFilter = document.getElementById('typeCategoryFilter')?.value || 'all';
+  const label = document.getElementById('typeCountLabel');
+
+  const filtered = crackerTypes.filter((t) => {
+    const catMatch = catFilter === 'all' || t.categorySlug === catFilter;
+    const textMatch = !search ||
+      (t.name || '').toLowerCase().includes(search) ||
+      (t.slug || '').toLowerCase().includes(search) ||
+      (t.description || '').toLowerCase().includes(search);
+    return catMatch && textMatch;
+  });
+
+  if (label) label.textContent = `${filtered.length} of ${crackerTypes.length} cracker types`;
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty" style="grid-column:1/-1">No cracker types found. Click "+ Add Cracker Type" to create one.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map((t) => {
+    const typeId = t._id || t.slug;
+    const parentCat = categories.find((c) => c.slug === t.categorySlug);
+    const parentName = parentCat ? parentCat.name : (t.categorySlug || 'General');
+    return `
+      <div class="item-manage-card" id="type-card-${typeId}">
+        <div>
+          <div class="item-manage-head">
+            <h3 class="item-manage-title">🏷️ ${escapeHtml(t.name)}</h3>
+            <span class="item-slug-pill">${escapeHtml(t.slug)}</span>
+          </div>
+          <span class="item-category-pill">📁 ${escapeHtml(parentName)}</span>
+          <p class="item-desc">${escapeHtml(t.description || 'No description provided.')}</p>
+        </div>
+        <div class="item-actions">
+          <button type="button" class="secondary" onclick="openTypeModal('${typeId}')">✏️ Edit</button>
+          <button type="button" class="danger" onclick="deleteType('${typeId}', '${escapeHtml(t.name)}')">🗑 Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function autoSlugType() {
+  const name = document.getElementById('typ_name').value;
+  const slugInput = document.getElementById('typ_slug');
+  if (slugInput && !slugInput.dataset.manual) {
+    slugInput.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  }
+}
+
+function openTypeModal(typeId) {
+  const modal = document.getElementById('typeModalBackdrop');
+  const title = document.getElementById('typeModalTitle');
+  const form = document.getElementById('typeForm');
+  const idInput = document.getElementById('typeId');
+  const nameInput = document.getElementById('typ_name');
+  const slugInput = document.getElementById('typ_slug');
+  const catSelect = document.getElementById('typ_category');
+  const descInput = document.getElementById('typ_description');
+  const errEl = document.getElementById('typeFormError');
+
+  errEl.textContent = '';
+  form.reset();
+  slugInput.dataset.manual = '';
+
+  // Populate category options in type modal
+  catSelect.innerHTML = '<option value="">Select Category</option>' + categories.map((c) => `
+    <option value="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</option>
+  `).join('');
+
+  if (typeId) {
+    const t = crackerTypes.find((it) => it._id === typeId || it.slug === typeId);
+    if (t) {
+      title.textContent = 'Edit Cracker Type';
+      idInput.value = t._id || t.slug;
+      nameInput.value = t.name || '';
+      slugInput.value = t.slug || '';
+      slugInput.dataset.manual = 'true';
+      catSelect.value = t.categorySlug || '';
+      descInput.value = t.description || '';
+    }
+  } else {
+    title.textContent = 'Add Cracker Type';
+    idInput.value = '';
+  }
+  modal.style.display = 'flex';
+}
+
+function closeTypeModal() {
+  const modal = document.getElementById('typeModalBackdrop');
+  if (modal) modal.style.display = 'none';
+}
+
+async function saveType(event) {
+  event.preventDefault();
+  const id = document.getElementById('typeId').value.trim();
+  const name = document.getElementById('typ_name').value.trim();
+  const slug = document.getElementById('typ_slug').value.trim().toLowerCase();
+  const categorySlug = document.getElementById('typ_category').value.trim();
+  const description = document.getElementById('typ_description').value.trim();
+  const errEl = document.getElementById('typeFormError');
+  const btn = document.getElementById('saveTypeBtn');
+
+  if (!name || !slug) {
+    errEl.textContent = 'Cracker type name and slug are required.';
+    return false;
+  }
+  if (!categorySlug) {
+    errEl.textContent = 'Please choose a parent category.';
+    return false;
+  }
+
+  // Prevent duplicate type name client-side
+  const dup = crackerTypes.find((t) => (t._id !== id && t.slug !== id) && (
+    (t.name || '').toLowerCase() === name.toLowerCase() || (t.slug || '').toLowerCase() === slug
+  ));
+  if (dup) {
+    errEl.textContent = `A cracker type with name "${name}" or slug "${slug}" already exists.`;
+    return false;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const endpoint = id ? '/api/types/update' : '/api/types';
+    const payload = id ? { id, name, slug, categorySlug, description } : { name, slug, categorySlug, description };
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+      closeTypeModal();
+      await loadTypes();
+      alert(`Cracker Type "${name}" saved successfully!`);
+    } else {
+      errEl.textContent = data.error || 'Failed to save cracker type.';
+    }
+  } catch (err) {
+    errEl.textContent = err.message || 'Server error while saving cracker type.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Cracker Type';
+  }
+  return false;
+}
+
+async function deleteType(id, name) {
+  if (!confirm(`Are you sure you want to delete cracker type "${name}"?`)) {
+    return;
+  }
+  try {
+    const res = await fetch('/api/types/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (data.success) {
+      await loadTypes();
+      alert(`Cracker type "${name}" deleted.`);
+    } else {
+      alert('Failed to delete cracker type: ' + (data.error || 'Server error'));
+    }
+  } catch (err) {
+    alert('Error deleting cracker type: ' + err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DYNAMIC DROPDOWN SYNCHRONIZATION
+═══════════════════════════════════════════════════════════════ */
+function populateCategoryAndTypeSelects() {
+  // 1. Product Form Category (#f_material)
+  const fMaterial = document.getElementById('f_material');
+  if (fMaterial && categories.length > 0) {
+    const cur = fMaterial.value;
+    fMaterial.innerHTML = categories.map((c) => `
+      <option value="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</option>
+    `).join('');
+    if (cur && categories.some((c) => c.slug === cur)) fMaterial.value = cur;
+  }
+
+  // 2. Product Form Type (#f_type)
+  const fType = document.getElementById('f_type');
+  if (fType && crackerTypes.length > 0) {
+    const cur = fType.value;
+    fType.innerHTML = crackerTypes.map((t) => `
+      <option value="${escapeHtml(t.slug)}">${escapeHtml(t.name)}</option>
+    `).join('');
+    if (cur && crackerTypes.some((t) => t.slug === cur)) fType.value = cur;
+  }
+
+  // 3. Products Filter Category (#materialFilterAdmin)
+  const matFilter = document.getElementById('materialFilterAdmin');
+  if (matFilter && categories.length > 0) {
+    const cur = matFilter.value;
+    matFilter.innerHTML = '<option value="all">All Categories</option>' + categories.map((c) => `
+      <option value="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</option>
+    `).join('');
+    if (cur) matFilter.value = cur;
+  }
+
+  // 4. Products Filter Type (#typeFilterAdmin)
+  const typFilter = document.getElementById('typeFilterAdmin');
+  if (typFilter && crackerTypes.length > 0) {
+    const cur = typFilter.value;
+    typFilter.innerHTML = '<option value="all">All Types</option>' + crackerTypes.map((t) => `
+      <option value="${escapeHtml(t.slug)}">${escapeHtml(t.name)}</option>
+    `).join('');
+    if (cur) typFilter.value = cur;
+  }
+
+  // 5. Cracker Types Filter Category (#typeCategoryFilter)
+  const tCatFilter = document.getElementById('typeCategoryFilter');
+  if (tCatFilter && categories.length > 0) {
+    const cur = tCatFilter.value;
+    tCatFilter.innerHTML = '<option value="all">All Categories</option>' + categories.map((c) => `
+      <option value="${escapeHtml(c.slug)}">${escapeHtml(c.name)}</option>
+    `).join('');
+    if (cur) tCatFilter.value = cur;
+  }
+}
+
+// Initial background load of categories and types
+loadCategories();
+loadTypes();

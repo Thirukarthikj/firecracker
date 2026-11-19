@@ -376,3 +376,133 @@ button.danger { background: #b03a3a; }
   background: #fff;
   cursor: pointer;
 }
+
+/* ═══════════════════════════════════════
+   INVOICE ACTIONS & PILLS
+═══════════════════════════════════════ */
+.btn-invoice-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #1e3a8a;
+  color: #fff !important;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-invoice-pdf:hover {
+  background: #172554;
+}
+
+.btn-invoice-wa {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #25D366;
+  color: #fff !important;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-invoice-wa:hover {
+  background: #1eb857;
+}
+
+.invoice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+/* ═══════════════════════════════════════
+   CATEGORY & TYPE MANAGEMENT GRIDS
+═══════════════════════════════════════ */
+.category-grid, .type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+}
+
+.item-manage-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.item-manage-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+}
+.item-manage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.item-manage-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+.item-slug-pill {
+  font-size: 0.72rem;
+  background: #f3f0e8;
+  color: #777;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-family: monospace;
+  white-space: nowrap;
+}
+.item-category-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+.item-desc {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 6px 0 16px 0;
+  line-height: 1.45;
+  flex-grow: 1;
+}
+.item-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f0e9;
+}
+.item-actions button {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
