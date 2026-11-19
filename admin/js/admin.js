@@ -441,6 +441,8 @@ function renderNewsletter() {
 /* ═══════════════════════════════════════
    MONGODB ORDERS MANAGEMENT
 ═══════════════════════════════════════ */
+let activeModalOrderId = null;
+
 async function loadOrders() {
   try {
     // Load Stats
@@ -453,18 +455,22 @@ async function loadOrders() {
           const revEl = document.getElementById('statTotalRevenue');
           const penEl = document.getElementById('statPendingOrders');
           const conEl = document.getElementById('statConfirmedOrders');
+          const proEl = document.getElementById('statProcessingOrders');
           const delEl = document.getElementById('statDeliveredOrders');
+          const canEl = document.getElementById('statCancelledOrders');
           if (totEl) totEl.textContent = s.totalOrders || 0;
           if (revEl) revEl.textContent = '₹' + (s.totalRevenue || 0).toLocaleString('en-IN');
           if (penEl) penEl.textContent = s.pendingOrders || 0;
           if (conEl) conEl.textContent = s.confirmedOrders || 0;
+          if (proEl) proEl.textContent = s.processingOrders || 0;
           if (delEl) delEl.textContent = s.deliveredOrders || 0;
+          if (canEl) canEl.textContent = s.cancelledOrders || 0;
         }
       })
       .catch((err) => console.warn('Could not fetch order stats:', err));
 
     // Load Orders List
-    const res = await fetch('/api/orders?limit=100');
+    const res = await fetch('/api/orders?limit=150');
     const data = await res.json();
     if (data.success) {
       orders = data.orders || [];
@@ -488,10 +494,15 @@ function renderOrders() {
 
   const searchInput = document.getElementById('orderSearchInput');
   const statusFilter = document.getElementById('orderStatusFilter');
+  const dateFilter = document.getElementById('orderDateFilter');
   const countLabel = document.getElementById('orderCountLabel');
 
   const search = searchInput ? searchInput.value.toLowerCase().trim() : '';
   const status = statusFilter ? statusFilter.value : 'all';
+  const dateVal = dateFilter ? dateFilter.value : 'all';
+
+  const now = new Date();
+  const todayStr = now.toDateString();
 
   const filtered = orders.filter((o) => {
     const statusMatch = status === 'all' || (o.status || '').toLowerCase() === status.toLowerCase();
@@ -500,10 +511,26 @@ function renderOrders() {
       (o.orderNumber || '') + ' ' +
       (cust.name || '') + ' ' +
       (cust.phone || '') + ' ' +
-      (cust.city || '')
+      (cust.city || '') + ' ' +
+      (cust.district || '') + ' ' +
+      (cust.pincode || '')
     ).toLowerCase();
     const searchMatch = !search || textSearch.includes(search);
-    return statusMatch && searchMatch;
+
+    let dateMatch = true;
+    if (dateVal !== 'all' && o.createdAt) {
+      const oDate = new Date(o.createdAt);
+      if (dateVal === 'today') {
+        dateMatch = oDate.toDateString() === todayStr;
+      } else if (dateVal === '7days') {
+        const diffDays = (now - oDate) / (1000 * 60 * 60 * 24);
+        dateMatch = diffDays <= 7;
+      } else if (dateVal === 'month') {
+        dateMatch = oDate.getMonth() === now.getMonth() && oDate.getFullYear() === now.getFullYear();
+      }
+    }
+
+    return statusMatch && searchMatch && dateMatch;
   });
 
   if (countLabel) {
@@ -522,9 +549,6 @@ function renderOrders() {
     }) : '—';
     const currentStatus = (order.status || 'pending').toLowerCase();
     const statusClass = 'status-' + currentStatus;
-    const rawPhone = (cust.phone || '').replace(/[^0-9]/g, '');
-    const cleanPhone = rawPhone.length === 10 ? '91' + rawPhone : rawPhone;
-    const waLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent('Hello ' + (cust.name || 'Customer') + ', regarding your Sivakasi Firecrackers order #' + (order.orderNumber || ''))}` : '#';
 
     // Render Items
     const items = order.items || [];
@@ -543,6 +567,7 @@ function renderOrders() {
     }).join('');
 
     const idStr = order._id || order.orderNumber;
+    const locLine = [cust.addressLine1 || cust.address, cust.city, cust.district, cust.state].filter(Boolean).join(', ') + (cust.pincode ? ' - ' + cust.pincode : '');
 
     return `
       <div class="order-card" id="order-${idStr}">
@@ -558,13 +583,13 @@ function renderOrders() {
           <div class="order-customer-box">
             <div>
               <div class="cust-name">👤 ${escapeHtml(cust.name || 'Customer')}</div>
-              <div class="cust-detail">📞 <strong>Phone:</strong> ${escapeHtml(cust.phone || 'N/A')}</div>
-              <div class="cust-detail">📍 <strong>City / Address:</strong> ${escapeHtml(cust.city || cust.addressLine1 || 'N/A')}</div>
-              <div class="cust-detail">💳 <strong>Payment:</strong> ${(order.paymentMethod || 'whatsapp').toUpperCase()} &middot; <span style="text-transform:capitalize">${escapeHtml(order.paymentStatus || 'pending')}</span></div>
-              ${order.invoiceNumber ? `<div class="cust-detail" style="color:#0369a1;font-weight:600">📄 <strong>Invoice:</strong> ${escapeHtml(order.invoiceNumber)}</div>` : ''}
+              <div class="cust-detail">📞 <strong>Mobile:</strong> ${escapeHtml(cust.phone || 'N/A')} ${cust.email ? `&middot; ✉️ <strong>Email:</strong> ${escapeHtml(cust.email)}` : ''}</div>
+              <div class="cust-detail">📍 <strong>Address:</strong> ${escapeHtml(locLine || 'N/A')}</div>
+              <div class="cust-detail">💳 <strong>Payment:</strong> ${(order.paymentMethod || 'direct_order').toUpperCase()} &middot; <span style="text-transform:capitalize;font-weight:600">${escapeHtml(order.paymentStatus || 'pending')}</span></div>
+              ${order.notes ? `<div class="cust-detail" style="color:#555">📝 <strong>Notes:</strong> ${escapeHtml(order.notes)}</div>` : ''}
             </div>
             <div>
-              ${cleanPhone ? `<a href="${waLink}" target="_blank" class="btn-wa-chat">💬 Chat on WhatsApp</a>` : ''}
+              <button type="button" class="btn-view-order" onclick="openOrderDetails('${idStr}')">👁️ View Order</button>
             </div>
           </div>
 
@@ -589,12 +614,13 @@ function renderOrders() {
               <span class="order-total-amount">₹${(order.total || order.subtotal || 0).toLocaleString('en-IN')}</span>
             </div>
             <div class="order-actions-block">
+              <button type="button" class="btn-view-order" onclick="openOrderDetails('${idStr}')">👁️ View Details</button>
               <button type="button" class="btn-invoice-pdf" onclick="downloadInvoicePDF('${idStr}')" title="Download Official PDF Invoice">📄 Download PDF</button>
-              <button type="button" class="btn-invoice-wa" onclick="shareInvoiceWhatsApp('${idStr}')" title="Share Invoice via WhatsApp">💬 Share via WhatsApp</button>
               <label style="font-size:0.8rem;color:#666;margin-left:4px">Status:</label>
               <select class="status-select" onchange="updateOrderStatus('${idStr}', this.value)">
                 <option value="pending" ${currentStatus === 'pending' ? 'selected' : ''}>Pending</option>
                 <option value="confirmed" ${currentStatus === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+                <option value="processing" ${currentStatus === 'processing' ? 'selected' : ''}>Processing</option>
                 <option value="dispatched" ${currentStatus === 'dispatched' ? 'selected' : ''}>Dispatched</option>
                 <option value="delivered" ${currentStatus === 'delivered' ? 'selected' : ''}>Delivered</option>
                 <option value="cancelled" ${currentStatus === 'cancelled' ? 'selected' : ''}>Cancelled</option>
@@ -606,6 +632,151 @@ function renderOrders() {
       </div>
     `;
   }).join('');
+}
+
+/* ═══════════════════════════════════════
+   INDIVIDUAL ORDER DETAILS MODAL
+═══════════════════════════════════════ */
+function openOrderDetails(orderId) {
+  const order = orders.find((o) => (o._id === orderId || o.orderNumber === orderId));
+  if (!order) {
+    alert('Order details could not be found.');
+    return;
+  }
+  activeModalOrderId = orderId;
+  const cust = order.shippingAddress || {};
+  const orderDate = order.createdAt ? new Date(order.createdAt).toLocaleString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }) : '—';
+  const status = (order.status || 'pending').toLowerCase();
+  const paymentStatus = (order.paymentStatus || 'pending').toLowerCase();
+
+  document.getElementById('modalOrderNumber').textContent = `Order #${order.orderNumber || 'ORD-UNKNOWN'}`;
+  document.getElementById('modalOrderDate').textContent = `Submitted on: ${orderDate}`;
+
+  const badgeEl = document.getElementById('modalOrderStatusBadge');
+  if (badgeEl) {
+    badgeEl.className = 'badge-status status-' + status;
+    badgeEl.textContent = status.toUpperCase();
+  }
+
+  document.getElementById('modalCustName').textContent = cust.name || 'N/A';
+  document.getElementById('modalCustPhone').textContent = cust.phone || 'N/A';
+  document.getElementById('modalCustEmail').textContent = cust.email || '—';
+  document.getElementById('modalCustAddress').textContent = cust.addressLine1 || cust.address || '—';
+  document.getElementById('modalCustCity').textContent = cust.city || '—';
+  document.getElementById('modalCustDistrict').textContent = cust.district || '—';
+  document.getElementById('modalCustState').textContent = cust.state || 'Tamil Nadu';
+  document.getElementById('modalCustPincode').textContent = cust.pincode || '—';
+
+  const notesWrap = document.getElementById('modalNotesWrap');
+  const notesEl = document.getElementById('modalCustNotes');
+  const notesText = cust.instructions || order.notes || '';
+  if (notesText) {
+    if (notesWrap) notesWrap.style.display = 'block';
+    if (notesEl) notesEl.textContent = notesText;
+  } else {
+    if (notesWrap) notesWrap.style.display = 'none';
+  }
+
+  // Items table
+  const tbody = document.getElementById('modalItemsTableBody');
+  if (tbody) {
+    const items = order.items || [];
+    tbody.innerHTML = items.map((item) => {
+      const q = Number(item.quantity) || 1;
+      const p = Number(item.price) || 0;
+      const sub = q * p;
+      const imgTag = item.image ? `<img src="${escapeHtml(item.image)}" alt="" class="order-item-img" onerror="this.onerror=null;this.src='../images/placeholder.jpg'">` : '';
+      return `
+        <tr>
+          <td>${imgTag}<strong>${escapeHtml(item.name || 'Cracker Item')}</strong> ${item.sku ? `<span style="font-size:0.75rem;color:#888">(${escapeHtml(item.sku)})</span>` : ''}</td>
+          <td>${escapeHtml(item.category || item.type || 'Firecracker')}</td>
+          <td>${escapeHtml(item.pieces || '—')}</td>
+          <td style="text-align:center"><strong>${q}</strong></td>
+          <td style="text-align:right">₹${p.toLocaleString('en-IN')}</td>
+          <td style="text-align:right"><strong>₹${sub.toLocaleString('en-IN')}</strong></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // Financial & Payment
+  document.getElementById('modalPaymentStatus').textContent = paymentStatus.toUpperCase();
+  document.getElementById('modalPaymentMethod').textContent = (order.paymentMethod || 'direct_order').toUpperCase();
+  document.getElementById('modalInvoiceNumber').textContent = order.invoiceNumber || 'Not Generated Yet';
+  document.getElementById('modalSubtotal').textContent = '₹' + (Number(order.subtotal || order.total) || 0).toLocaleString('en-IN');
+  document.getElementById('modalGrandTotal').textContent = '₹' + (Number(order.total) || 0).toLocaleString('en-IN');
+
+  const statusSel = document.getElementById('modalStatusSelect');
+  if (statusSel) statusSel.value = status;
+
+  const paySel = document.getElementById('modalPaymentSelect');
+  if (paySel) paySel.value = paymentStatus;
+
+  document.getElementById('orderDetailsModalBackdrop').style.display = 'flex';
+}
+
+function closeOrderDetailsModal() {
+  const modal = document.getElementById('orderDetailsModalBackdrop');
+  if (modal) modal.style.display = 'none';
+  activeModalOrderId = null;
+}
+
+async function modalUpdateOrderStatus() {
+  if (!activeModalOrderId) return;
+  const newStatus = document.getElementById('modalStatusSelect').value;
+  await updateOrderStatus(activeModalOrderId, newStatus);
+  const badgeEl = document.getElementById('modalOrderStatusBadge');
+  if (badgeEl) {
+    badgeEl.className = 'badge-status status-' + newStatus.toLowerCase();
+    badgeEl.textContent = newStatus.toUpperCase();
+  }
+  const ord = orders.find((o) => (o._id === activeModalOrderId || o.orderNumber === activeModalOrderId));
+  if (ord && ord.invoiceNumber) {
+    document.getElementById('modalInvoiceNumber').textContent = ord.invoiceNumber;
+  }
+}
+
+async function modalUpdatePaymentStatus() {
+  if (!activeModalOrderId) return;
+  const newPayStatus = document.getElementById('modalPaymentSelect').value;
+  await updateOrderPaymentStatus(activeModalOrderId, newPayStatus);
+  document.getElementById('modalPaymentStatus').textContent = newPayStatus.toUpperCase();
+}
+
+function modalDownloadPDF() {
+  if (!activeModalOrderId) return;
+  downloadInvoicePDF(activeModalOrderId);
+}
+
+function modalDeleteOrder() {
+  if (!activeModalOrderId) return;
+  const ord = orders.find((o) => (o._id === activeModalOrderId || o.orderNumber === activeModalOrderId));
+  const num = ord ? ord.orderNumber : activeModalOrderId;
+  closeOrderDetailsModal();
+  deleteOrder(activeModalOrderId, num);
+}
+
+async function updateOrderPaymentStatus(orderId, newPaymentStatus) {
+  try {
+    const res = await fetch('/api/orders/update-payment-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: orderId, paymentStatus: newPaymentStatus })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const ord = orders.find((o) => (o._id === orderId || o.orderNumber === orderId));
+      if (ord) ord.paymentStatus = newPaymentStatus;
+      renderOrders();
+    } else {
+      alert('Failed to update payment status: ' + (data.error || 'Server error'));
+    }
+  } catch (err) {
+    console.error('Error updating payment status:', err);
+    alert('Failed to update payment status: ' + err.message);
+  }
 }
 
 async function updateOrderStatus(orderId, newStatus) {
@@ -632,16 +803,20 @@ async function updateOrderStatus(orderId, newStatus) {
           if (data.success && data.stats) {
             const penEl = document.getElementById('statPendingOrders');
             const conEl = document.getElementById('statConfirmedOrders');
+            const proEl = document.getElementById('statProcessingOrders');
             const delEl = document.getElementById('statDeliveredOrders');
+            const canEl = document.getElementById('statCancelledOrders');
             if (penEl) penEl.textContent = data.stats.pendingOrders || 0;
             if (conEl) conEl.textContent = data.stats.confirmedOrders || 0;
+            if (proEl) proEl.textContent = data.stats.processingOrders || 0;
             if (delEl) delEl.textContent = data.stats.deliveredOrders || 0;
+            if (canEl) canEl.textContent = data.stats.cancelledOrders || 0;
           }
         })
         .catch((err) => console.warn(err));
 
       if (newStatus === 'confirmed' && data.invoiceNumber) {
-        alert(`Order confirmed!\nUnique Invoice #${data.invoiceNumber} has been generated automatically for this order.\nYou can now download the PDF invoice or share it with the customer via WhatsApp.`);
+        alert(`Order confirmed!\nUnique Invoice #${data.invoiceNumber} has been generated automatically for this order.\nYou can now download the PDF invoice directly.`);
       }
     } else {
       alert('Failed to update status: ' + (data.error || 'Server error'));
@@ -839,11 +1014,12 @@ async function downloadInvoicePDF(orderId) {
   doc.text(cust.name || 'Valued Customer', 18, boxTop + 13);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(70, 70, 70);
-  doc.text(`Phone: ${cust.phone || 'N/A'}`, 18, boxTop + 18);
-  doc.text(`City / State: ${cust.city || 'Sivakasi'}, ${cust.state || 'Tamil Nadu'}`, 18, boxTop + 23);
-  doc.text(`Address: ${cust.addressLine1 || cust.city || 'Standard Delivery Address'}`, 18, boxTop + 28, { maxWidth: 80 });
+  doc.text(`Mobile: ${cust.phone || 'N/A'}${cust.email ? ' | Email: ' + cust.email : ''}`, 18, boxTop + 18, { maxWidth: 80 });
+  doc.text(`Address: ${cust.addressLine1 || cust.address || 'Standard Delivery Address'}`, 18, boxTop + 23, { maxWidth: 80 });
+  const locLine = [cust.city, cust.district, cust.state].filter(Boolean).join(', ') + (cust.pincode ? ' - ' + cust.pincode : '');
+  doc.text(locLine || 'Tamil Nadu', 18, boxTop + 29, { maxWidth: 80 });
 
   // Right Box: Invoice Details
   const rightX = 108;
@@ -872,13 +1048,15 @@ async function downloadInvoicePDF(orderId) {
   doc.text('Order ID:', rightX + 4, boxTop + 23);
   doc.text(`#${order.orderNumber || '—'}`, rightX + 32, boxTop + 23);
 
-  doc.text('Payment Mode:', rightX + 4, boxTop + 28);
-  doc.text(`${(order.paymentMethod || 'WhatsApp / COD').toUpperCase()}`, rightX + 32, boxTop + 28);
+  doc.text('Order Status:', rightX + 4, boxTop + 28);
+  doc.setFont('helvetica', 'bold');
+  doc.text((order.status || 'Pending').toUpperCase(), rightX + 32, boxTop + 28);
 
+  doc.setFont('helvetica', 'normal');
   doc.text('Payment Status:', rightX + 4, boxTop + 33);
   doc.setFont('helvetica', 'bold');
-  doc.setTextColor(order.paymentStatus === 'confirmed' ? 22 : 180, order.paymentStatus === 'confirmed' ? 101 : 100, 20);
-  doc.text((order.paymentStatus || 'Confirmed').toUpperCase(), rightX + 32, boxTop + 33);
+  doc.setTextColor(order.paymentStatus === 'confirmed' || order.paymentStatus === 'paid' ? 22 : 180, 101, 20);
+  doc.text((order.paymentStatus || 'Pending').toUpperCase(), rightX + 32, boxTop + 33);
 
   // Table of Items
   const items = order.items || [];

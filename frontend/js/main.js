@@ -588,119 +588,279 @@ function closeCartOnOverlay(e) {
   }
 }
 
-function checkoutWhatsApp() {
-  if (cart.length === 0) {
-    alert('Your cart is empty.');
+/* ═══════════════════════════════════════
+   2-STEP CHECKOUT & MONGODB SUBMISSION
+═══════════════════════════════════════ */
+function goToCheckout() {
+  if (!cart || cart.length === 0) {
+    alert('Your cart is empty. Please add items to your cart before proceeding to checkout.');
     return;
   }
-  var name = (document.getElementById('cartCustName') ? document.getElementById('cartCustName').value.trim() : '');
-  var phone = (document.getElementById('cartCustPhone') ? document.getElementById('cartCustPhone').value.trim() : '');
-  var city = (document.getElementById('cartCustCity') ? document.getElementById('cartCustCity').value.trim() : '');
+  var step1 = document.getElementById('cartStep1');
+  var step2 = document.getElementById('cartStep2');
+  var headerTitle = document.getElementById('cartHeaderTitle');
 
-  if (!name || !phone) {
-    alert('Please enter your Name and Phone Number to place your order.');
-    return;
+  if (step1) step1.style.display = 'none';
+  if (step2) step2.style.display = 'block';
+  if (headerTitle) {
+    headerTitle.innerHTML = '&#128221; Complete Your Order';
   }
 
-  var totalItems = 0;
+  // Render Order Summary
+  renderCheckoutSummary();
+
+  // Clear previous error message
+  var errEl = document.getElementById('checkoutFormError');
+  if (errEl) errEl.style.display = 'none';
+}
+
+function backToCart() {
+  var step1 = document.getElementById('cartStep1');
+  var step2 = document.getElementById('cartStep2');
+  var headerTitle = document.getElementById('cartHeaderTitle');
+
+  if (step2) step2.style.display = 'none';
+  if (step1) step1.style.display = 'block';
+  if (headerTitle) {
+    var count = cart.reduce(function(acc, it) { return acc + it.qty; }, 0);
+    headerTitle.innerHTML = '&#128722; Your Cracker Cart <span id="cartHeaderCount" style="font-size:0.85rem;color:var(--mid);font-weight:normal">(' + count + ' items)</span>';
+  }
+}
+
+function renderCheckoutSummary() {
+  var container = document.getElementById('checkoutSummaryItems');
+  var totalEl = document.getElementById('checkoutSummaryTotal');
+  if (!container) return;
+
   var totalPrice = 0;
-  var itemList = '';
+  var html = '';
 
-  cart.forEach(function(item, index) {
-    totalItems += item.qty;
-    var lineTotal = (item.price || 0) * item.qty;
+  cart.forEach(function(item) {
+    var lineTotal = (item.price || 0) * (item.qty || 1);
     totalPrice += lineTotal;
-    itemList += (index + 1) + '. ' + item.name + ' (' + item.code + ')\n' +
-                '   Quantity: ' + item.qty + ' x ₹' + item.price + ' = ₹' + lineTotal + '\n';
+    html += '<div class="checkout-summary-row">' +
+              '<span><strong>' + escapeHtmlCat(item.name) + '</strong> &times; ' + item.qty + (item.pieces ? ' <small style="color:#888">(' + escapeHtmlCat(item.pieces) + ')</small>' : '') + '</span>' +
+              '<span>₹' + lineTotal.toLocaleString('en-IN') + '</span>' +
+            '</div>';
   });
 
-  var checkoutBtn = document.querySelector('.btn-checkout-wa');
-  var origBtnHtml = checkoutBtn ? checkoutBtn.innerHTML : '';
-  if (checkoutBtn) {
-    checkoutBtn.disabled = true;
-    checkoutBtn.innerHTML = '<span>⏳ Saving Order in MongoDB...</span>';
+  container.innerHTML = html;
+  if (totalEl) {
+    totalEl.textContent = '₹' + totalPrice.toLocaleString('en-IN');
+  }
+}
+
+function handleOrderSubmit(event) {
+  if (event && event.preventDefault) event.preventDefault();
+
+  if (!cart || cart.length === 0) {
+    alert('Your cart is empty.');
+    backToCart();
+    return false;
+  }
+
+  var errEl = document.getElementById('checkoutFormError');
+  var btn = document.getElementById('btnSubmitOrder');
+
+  var name = (document.getElementById('custName')?.value || '').trim();
+  var phone = (document.getElementById('custPhone')?.value || '').trim();
+  var email = (document.getElementById('custEmail')?.value || '').trim();
+  var address = (document.getElementById('custAddress')?.value || '').trim();
+  var city = (document.getElementById('custCity')?.value || '').trim();
+  var district = (document.getElementById('custDistrict')?.value || '').trim();
+  var state = (document.getElementById('custState')?.value || 'Tamil Nadu').trim();
+  var pincode = (document.getElementById('custPincode')?.value || '').trim();
+  var notes = (document.getElementById('custNotes')?.value || '').trim();
+
+  // Field validation
+  if (!name) {
+    showCheckoutError('Please enter your full name.');
+    return false;
+  }
+  var cleanPhone = phone.replace(/[^0-9]/g, '');
+  if (cleanPhone.length !== 10) {
+    showCheckoutError('Please enter a valid 10-digit mobile number.');
+    return false;
+  }
+  if (!address) {
+    showCheckoutError('Please enter your complete delivery address.');
+    return false;
+  }
+  if (!city) {
+    showCheckoutError('Please enter your city / town.');
+    return false;
+  }
+  if (!district) {
+    showCheckoutError('Please enter your district.');
+    return false;
+  }
+  var cleanPin = pincode.replace(/[^0-9]/g, '');
+  if (cleanPin.length !== 6) {
+    showCheckoutError('Please enter a valid 6-digit postal pincode.');
+    return false;
+  }
+
+  if (errEl) errEl.style.display = 'none';
+
+  // Calculate totals
+  var totalItems = 0;
+  var totalPrice = 0;
+  var itemsPayload = cart.map(function(item) {
+    var q = item.qty || 1;
+    var p = item.price || 0;
+    totalItems += q;
+    totalPrice += (p * q);
+    return {
+      code: item.code,
+      name: item.name,
+      price: p,
+      qty: q,
+      pieces: item.pieces || '',
+      img: item.img || ''
+    };
+  });
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Submitting Order to Database...';
   }
 
   var orderPayload = {
     customer: {
       name: name,
-      phone: phone,
-      city: city
+      phone: cleanPhone,
+      email: email,
+      address: address,
+      city: city,
+      district: district,
+      state: state,
+      pincode: cleanPin,
+      instructions: notes
     },
-    items: cart.map(function(item) {
-      return {
-        code: item.code,
-        name: item.name,
-        price: item.price || 0,
-        qty: item.qty || 1,
-        pieces: item.pieces || '',
-        img: item.img || ''
-      };
-    }),
+    items: itemsPayload,
     subtotal: totalPrice,
     total: totalPrice,
-    paymentMethod: 'whatsapp'
+    paymentMethod: 'direct_order'
   };
 
-  function finishCheckout(orderNumber) {
-    var waMsg = '🎆 *NEW DIWALI CRACKER ORDER — Sivakasi Firecrackers* 🎆\n\n' +
-                (orderNumber ? '🧾 *Order ID:* #' + orderNumber + '\n' : '') +
-                '👤 *Customer:* ' + name + '\n' +
-                '📞 *Phone:* ' + phone + '\n' +
-                (city ? '📍 *Delivery Location:* ' + city + '\n' : '') +
-                '-----------------------------------------\n' +
-                '📦 *ORDER ITEMS:*\n' + itemList +
-                '-----------------------------------------\n' +
-                '📊 *Total Items:* ' + totalItems + '\n' +
-                '💰 *Estimated Total:* ₹' + totalPrice.toLocaleString('en-IN') + '\n\n' +
-                'Please confirm item availability, final invoice, and dispatch details!';
-
-    // Backup to Firestore enquiries
-    try {
-      db.collection('enquiries').add({
-        type: 'cart_order',
-        orderNumber: orderNumber || '',
-        customerName: name,
-        phone: phone,
-        city: city,
-        items: cart,
-        totalItems: totalItems,
-        totalPrice: totalPrice,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).catch(function(err) { console.error('Could not save cart order to firestore:', err); });
-    } catch(e) {}
-
-    // Clear cart and update UI
-    cart = [];
-    saveCartToStorage();
-    if (checkoutBtn) {
-      checkoutBtn.disabled = false;
-      checkoutBtn.innerHTML = origBtnHtml;
-    }
-    closeCart();
-
-    // Open WhatsApp
-    sendToWhatsApp(waMsg);
-  }
-
-  // Save order to MongoDB via backend API
+  // POST directly to MongoDB API
   fetch('/api/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(orderPayload)
   })
   .then(function(res) {
-    if (!res.ok) throw new Error('Server returned ' + res.status);
-    return res.json();
+    return res.json().then(function(data) {
+      if (!res.ok) {
+        throw new Error(data.error || 'Server error occurred while saving your order.');
+      }
+      return data;
+    });
   })
   .then(function(data) {
-    var orderNum = data && data.orderNumber ? data.orderNumber : null;
-    finishCheckout(orderNum);
+    var orderData = data.order || {};
+    var orderNumber = data.orderNumber || orderData.orderNumber || 'ORD-' + Date.now();
+
+    // Backup to Firestore enquiries in background (non-blocking)
+    try {
+      if (typeof db !== 'undefined' && db && db.collection) {
+        db.collection('enquiries').add({
+          type: 'cart_order',
+          orderNumber: orderNumber,
+          customerName: name,
+          phone: cleanPhone,
+          city: city,
+          district: district,
+          pincode: cleanPin,
+          items: cart,
+          totalItems: totalItems,
+          totalPrice: totalPrice,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(function(e) { console.warn('Firestore backup note:', e); });
+      }
+    } catch(e) {}
+
+    // Clear cart from memory and localStorage
+    cart = [];
+    saveCartToStorage();
+
+    // Reset checkout form and restore button
+    var form = document.getElementById('orderCustomerForm');
+    if (form) form.reset();
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Submit Order';
+    }
+
+    // Switch cart back to Step 1
+    backToCart();
+    closeCart();
+
+    // Show dedicated Order Confirmation Success Modal
+    openOrderSuccessModal({
+      orderNumber: orderNumber,
+      customerName: name,
+      orderDate: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      productCount: totalItems,
+      totalAmount: totalPrice
+    });
   })
   .catch(function(err) {
-    console.warn('MongoDB API unavailable, falling back to direct WhatsApp order:', err);
-    finishCheckout(null);
+    console.error('Order submission error:', err);
+    showCheckoutError(err.message || 'Could not connect to order server. Please check your internet connection and try again.');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Submit Order';
+    }
   });
+
+  return false;
+}
+
+function showCheckoutError(msg) {
+  var errEl = document.getElementById('checkoutFormError');
+  if (errEl) {
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  } else {
+    alert(msg);
+  }
+}
+
+function openOrderSuccessModal(details) {
+  var modal = document.getElementById('orderSuccessModal');
+  if (!modal) return;
+
+  var idEl = document.getElementById('successOrderId');
+  var nameEl = document.getElementById('successCustName');
+  var dateEl = document.getElementById('successOrderDate');
+  var countEl = document.getElementById('successProductCount');
+  var totalEl = document.getElementById('successTotalAmount');
+  var statusEl = document.getElementById('successOrderStatus');
+
+  if (idEl) idEl.textContent = '#' + (details.orderNumber || 'ORD-CONFIRMED');
+  if (nameEl) nameEl.textContent = details.customerName || 'Valued Customer';
+  if (dateEl) dateEl.textContent = details.orderDate || new Date().toLocaleDateString('en-IN');
+  if (countEl) countEl.textContent = details.productCount + ' item(s)';
+  if (totalEl) totalEl.textContent = '₹' + (details.totalAmount || 0).toLocaleString('en-IN');
+  if (statusEl) statusEl.textContent = 'Pending';
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeOrderSuccessModal(page) {
+  var modal = document.getElementById('orderSuccessModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+  if (page) {
+    navigate(page);
+  }
+}
+
+// Backward-compatible alias for any residual calls
+function checkoutWhatsApp() {
+  goToCheckout();
 }
 
 window.addEventListener('load', function () {

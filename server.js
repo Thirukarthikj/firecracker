@@ -148,54 +148,66 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await parseBody(req);
       if (!body.customer || !body.customer.name || !body.customer.phone) {
-        return sendJson(res, 400, { success: false, error: 'Customer name and phone are required' });
+        return sendJson(res, 400, { success: false, error: 'Customer name and phone number are required' });
       }
       if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
         return sendJson(res, 400, { success: false, error: 'Order must contain at least one item' });
       }
 
       const orderNumber = generateOrderNumber();
+      const itemsList = body.items.map(i => {
+        const qty = parseInt(i.qty || i.quantity, 10) || 1;
+        const price = parseFloat(i.price) || 0;
+        return {
+          product: i.code || i.id || '',
+          name: i.name || 'Cracker Item',
+          sku: i.code || i.sku || '',
+          category: i.category || i.material || '',
+          type: i.type || '',
+          quantity: qty,
+          price: price,
+          subtotal: qty * price,
+          pieces: i.pieces || '',
+          image: i.img || i.image || ''
+        };
+      });
+
+      const calculatedSubtotal = itemsList.reduce((acc, it) => acc + it.subtotal, 0);
+      const finalTotal = parseFloat(body.total || body.subtotal) || calculatedSubtotal;
+
       const orderDoc = {
         orderNumber: orderNumber,
-        invoiceNumber: null, // Generated upon order confirmation
+        invoiceNumber: null, // Generated upon order confirmation or download
         invoiceDate: null,
         shippingAddress: {
           name: body.customer.name.trim(),
           phone: body.customer.phone.trim(),
-          addressLine1: (body.customer.address || body.customer.city || '').trim(),
-          addressLine2: '',
+          email: (body.customer.email || '').trim(),
+          addressLine1: (body.customer.address || body.customer.addressLine1 || body.customer.city || '').trim(),
+          addressLine2: (body.customer.addressLine2 || '').trim(),
           city: (body.customer.city || '').trim(),
-          state: body.customer.state || 'Tamil Nadu',
-          pincode: body.customer.pincode || '',
+          district: (body.customer.district || '').trim(),
+          state: (body.customer.state || 'Tamil Nadu').trim(),
+          pincode: (body.customer.pincode || '').trim(),
           country: 'India'
         },
-        items: body.items.map(i => ({
-          product: i.code || '',
-          name: i.name,
-          sku: i.code || '',
-          category: i.category || i.material || '',
-          type: i.type || '',
-          quantity: parseInt(i.qty, 10) || 1,
-          price: parseFloat(i.price) || 0,
-          pieces: i.pieces || '',
-          image: i.img || ''
-        })),
-        subtotal: parseFloat(body.subtotal || body.total || 0),
-        discount: 0,
+        items: itemsList,
+        subtotal: calculatedSubtotal,
+        discount: parseFloat(body.discount || 0),
         tax: 0,
         shippingCharge: 0,
-        total: parseFloat(body.total || body.subtotal || 0),
+        total: finalTotal,
         status: 'pending',
         paymentStatus: 'pending',
-        paymentMethod: body.paymentMethod || 'whatsapp',
+        paymentMethod: body.paymentMethod || 'direct_order',
         companyDetails: {
           name: 'Sivakasi Firecrackers',
           address: 'Main Road, Sivakasi – 626 123, Virudhunagar Dist., Tamil Nadu, India',
           phone: '+91 9342553805',
-          email: 'sivakasifirecrackers@gmail.com',
-          gstin: '33AAACF1234F1Z5'
+          email: 'sales@sivakasifirecrackers.com',
+          gstin: '33AAACF8124P1Z4'
         },
-        notes: body.notes || '',
+        notes: (body.customer.instructions || body.instructions || body.notes || '').trim(),
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -279,6 +291,9 @@ const server = http.createServer(async (req, res) => {
         status: status.toLowerCase(),
         updatedAt: new Date()
       };
+      if (body.paymentStatus) {
+        updateFields.paymentStatus = body.paymentStatus.toLowerCase();
+      }
 
       // Automatic PDF Invoice generation: when status becomes confirmed, assign unique invoice number once
       let invoiceNumber = existingOrder.invoiceNumber;
@@ -288,7 +303,9 @@ const server = http.createServer(async (req, res) => {
         invoiceDate = new Date();
         updateFields.invoiceNumber = invoiceNumber;
         updateFields.invoiceDate = invoiceDate;
-        updateFields.paymentStatus = 'confirmed';
+        if (!body.paymentStatus) {
+          updateFields.paymentStatus = 'confirmed';
+        }
       }
 
       await ordersCollection.updateOne(filter, { $set: updateFields });
@@ -297,10 +314,44 @@ const server = http.createServer(async (req, res) => {
         success: true,
         invoiceNumber: invoiceNumber || null,
         invoiceDate: invoiceDate || null,
-        status: status.toLowerCase()
+        status: status.toLowerCase(),
+        paymentStatus: updateFields.paymentStatus || existingOrder.paymentStatus
       });
     } catch (err) {
       console.error('Error updating status:', err);
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/orders/update-payment-status -> Change payment status in MongoDB
+  if (pathname === '/api/orders/update-payment-status' && req.method === 'POST') {
+    if (!ordersCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { id, paymentStatus } = body;
+      if (!id || !paymentStatus) {
+        return sendJson(res, 400, { success: false, error: 'Missing id or paymentStatus' });
+      }
+
+      let filter;
+      try {
+        filter = { _id: new ObjectId(id) };
+      } catch (e) {
+        filter = { orderNumber: id };
+      }
+
+      await ordersCollection.updateOne(filter, {
+        $set: { paymentStatus: paymentStatus.toLowerCase(), updatedAt: new Date() }
+      });
+
+      return sendJson(res, 200, {
+        success: true,
+        paymentStatus: paymentStatus.toLowerCase()
+      });
+    } catch (err) {
+      console.error('Error updating payment status:', err);
       return sendJson(res, 500, { success: false, error: err.message });
     }
   }
@@ -394,7 +445,9 @@ const server = http.createServer(async (req, res) => {
       const totalOrders = await ordersCollection.countDocuments();
       const pendingOrders = await ordersCollection.countDocuments({ status: 'pending' });
       const confirmedOrders = await ordersCollection.countDocuments({ status: 'confirmed' });
+      const processingOrders = await ordersCollection.countDocuments({ status: 'processing' });
       const deliveredOrders = await ordersCollection.countDocuments({ status: 'delivered' });
+      const cancelledOrders = await ordersCollection.countDocuments({ status: 'cancelled' });
 
       const revAgg = await ordersCollection.aggregate([
         { $group: { _id: null, totalRevenue: { $sum: '$total' } } }
@@ -408,7 +461,9 @@ const server = http.createServer(async (req, res) => {
           totalRevenue,
           pendingOrders,
           confirmedOrders,
-          deliveredOrders
+          processingOrders,
+          deliveredOrders,
+          cancelledOrders
         }
       });
     } catch (err) {
