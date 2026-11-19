@@ -4,6 +4,8 @@ Welcome! This is the official website and management system for **Vel Agencies**
 
 This guide is written in **simple, step-by-step language** so that **any developer—even a beginner—can easily set up, run, understand, and customize this project**.
 
+> 🤝 **Handing over this project to someone else?** Read the comprehensive [Developer Handover & Full Setup Guide (SETUP_GUIDE.md)](SETUP_GUIDE.md) containing the master credentials sheet, service architecture, and deployment procedures.
+
 ---
 
 ## 📖 Table of Contents
