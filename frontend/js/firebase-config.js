@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   FIREBASE CONFIG — Thangamalar Jewellers (public site)
+   FIREBASE CONFIG — Vel Agencies (public site)
    ───────────────────────────────────────────────────────────────
    Replace the values below with the ones from your own Firebase
    project: Firebase Console → Project settings → General →

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   FIREBASE CONFIG — Thangamalar Jewellers (admin panel)
+   FIREBASE CONFIG — Vel Agencies (admin panel)
    ───────────────────────────────────────────────────────────────
    MUST be the exact same values as frontend/js/firebase-config.js —
    both the public site and the admin panel talk to the same

@@ -50,7 +50,7 @@ function httpGet(url) {
 }
 
 async function main() {
-  console.log('=== Thangamalar Jewellers — Project Test ===\n');
+  console.log('=== Vel Agencies — Project Test ===\n');
 
   const frontend = checkAssets(frontendRoot, 'frontend');
   const admin = checkAssets(adminRoot, 'admin');

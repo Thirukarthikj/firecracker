@@ -1,6 +1,6 @@
-# firecracker — Sivakasi Firecrackers
+# firecracker — Vel Agencies
 
-An end-to-end e-commerce web platform for **Sivakasi Firecrackers & Fireworks**, featuring an interactive product catalog, real-time cracker shopping cart drawer, WhatsApp direct checkout, MongoDB order storage, and an administrative management dashboard.
+An end-to-end e-commerce web platform for **Vel Agencies & Fireworks**, featuring an interactive product catalog, real-time cracker shopping cart drawer, WhatsApp direct checkout, MongoDB order storage, and an administrative management dashboard.
 
 ---
 
@@ -34,7 +34,7 @@ An end-to-end e-commerce web platform for **Sivakasi Firecrackers & Fireworks**,
 ## 📂 Project Structure
 
 ```
-thangamalar-jewellers/
+vel-agencies/
 ├── frontend/                     # Client application (served at root)
 │   ├── index.html                # Public website storefront
 │   ├── css/

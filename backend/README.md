@@ -69,7 +69,7 @@ click **Publish**.
    - Set **Signing Mode** to **Unsigned** (this is what lets the admin
      panel upload photos directly from the browser without exposing any
      secret key).
-   - Optionally set a default folder, e.g. `thangamalar-products`.
+   - Optionally set a default folder, e.g. `vel agencies`.
    - Save, then copy the preset name into
      `admin/js/cloudinary-config.js` (`CLOUDINARY_UPLOAD_PRESET`).
 
@@ -89,12 +89,12 @@ firebase use --add          # pick your Firebase project, alias it "default"
 
 # create two Hosting sites inside your one Firebase project —
 # one for the public site, one for the admin panel
-firebase hosting:sites:create thangamalar-site
-firebase hosting:sites:create thangamalar-admin
+firebase hosting:sites:create vel-agencies-site
+firebase hosting:sites:create vel-agencies-admin
 
 # wire each site to the matching "target" name used in firebase.json
-firebase target:apply hosting frontend thangamalar-site
-firebase target:apply hosting admin thangamalar-admin
+firebase target:apply hosting frontend vel-agencies-site
+firebase target:apply hosting admin vel-agencies-admin
 
 # ship the security rules
 firebase deploy --only firestore:rules
@@ -103,11 +103,11 @@ firebase deploy --only firestore:rules
 firebase deploy --only hosting
 ```
 
-Your public site will be live at `https://thangamalar-site.web.app` and
-the admin panel at `https://thangamalar-admin.web.app` (or your own
+Your public site will be live at `https://vel-agencies-site.web.app` and
+the admin panel at `https://vel-agencies-admin.web.app` (or your own
 custom domains, attached later under **Hosting → Add custom domain**).
 
-Site IDs (`thangamalar-site`, `thangamalar-admin`) must be globally unique
+Site IDs (`vel-agencies-site`, `vel-agencies-admin`) must be globally unique
 across all of Firebase — if either name is taken, pick another and update
 `.firebaserc` to match.
 

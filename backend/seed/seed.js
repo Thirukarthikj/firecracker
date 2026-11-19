@@ -25,7 +25,7 @@
  *   CLOUDINARY_CLOUD_NAME
  *   CLOUDINARY_API_KEY
  *   CLOUDINARY_API_SECRET
- *   CLOUDINARY_FOLDER               Defaults to "thangamalar-products"
+ *   CLOUDINARY_FOLDER               Defaults to "vel agencies"
  */
 
 require('dotenv').config();
@@ -57,7 +57,7 @@ if (CLOUDINARY_ENABLED) {
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
 }
-const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER || 'thangamalar-products';
+const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER || 'vel agencies';
 
 const IMAGES_DIR = path.join(__dirname, 'images');
 const SEED_FILE = path.join(__dirname, 'products_seed.json');
