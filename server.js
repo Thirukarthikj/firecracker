@@ -13,6 +13,7 @@ let db = null;
 let ordersCollection = null;
 let categoriesCollection = null;
 let typesCollection = null;
+let settingsCollection = null;
 
 const DEFAULT_CATEGORIES = [
   { name: 'Sparklers', slug: 'sparklers', description: 'Electric and color sparklers for festive celebrations' },
@@ -44,6 +45,7 @@ async function initMongo() {
     ordersCollection = db.collection('orders');
     categoriesCollection = db.collection('categories');
     typesCollection = db.collection('cracker_types');
+    settingsCollection = db.collection('settings');
     console.log(`Connected to MongoDB: ${DB_NAME}`);
 
     // Seed default categories if empty
@@ -58,6 +60,21 @@ async function initMongo() {
     if (typeCount === 0) {
       await typesCollection.insertMany(DEFAULT_TYPES.map(t => ({ ...t, createdAt: new Date() })));
       console.log('Seeded default cracker types into MongoDB');
+    }
+
+    // Seed default global offer settings if empty
+    const offerDoc = await settingsCollection.findOne({ key: 'global_offer' });
+    if (!offerDoc) {
+      await settingsCollection.insertOne({
+        key: 'global_offer',
+        enabled: true,
+        percentage: 80,
+        title: 'Diwali Mega Bumper Offer',
+        banner: '💥 Diwali Mega Bumper Sale: Flat 80% OFF on all crackers! Direct Sivakasi Factory Prices.',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      console.log('Seeded default global offer settings (80% OFF) into MongoDB');
     }
   } catch (err) {
     console.error('MongoDB connection error:', err.message);
@@ -716,6 +733,84 @@ const server = http.createServer(async (req, res) => {
       const del = await typesCollection.deleteOne(filter);
       return sendJson(res, 200, { success: true, deleted: del.deletedCount });
     } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // GLOBAL FESTIVE OFFER SETTINGS API
+  // ═══════════════════════════════════════════
+
+  // GET /api/settings/offer -> Retrieve current global offer settings
+  if (pathname === '/api/settings/offer' && req.method === 'GET') {
+    if (!settingsCollection) {
+      return sendJson(res, 200, {
+        success: true,
+        offer: {
+          enabled: true,
+          percentage: 80,
+          title: 'Diwali Mega Bumper Offer',
+          banner: '💥 Diwali Mega Bumper Sale: Flat 80% OFF on all crackers! Factory Direct Prices.'
+        }
+      });
+    }
+    try {
+      const doc = await settingsCollection.findOne({ key: 'global_offer' });
+      if (doc) {
+        return sendJson(res, 200, { success: true, offer: doc });
+      }
+      const defaultOffer = {
+        key: 'global_offer',
+        enabled: true,
+        percentage: 80,
+        title: 'Diwali Mega Bumper Offer',
+        banner: '💥 Diwali Mega Bumper Sale: Flat 80% OFF on all crackers! Factory Direct Prices.',
+        updatedAt: new Date()
+      };
+      await settingsCollection.insertOne(defaultOffer);
+      return sendJson(res, 200, { success: true, offer: defaultOffer });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
+  }
+
+  // POST /api/settings/offer -> Update global offer settings
+  if (pathname === '/api/settings/offer' && req.method === 'POST') {
+    if (!settingsCollection) {
+      return sendJson(res, 503, { success: false, error: 'MongoDB database not connected' });
+    }
+    try {
+      const body = await parseBody(req);
+      const enabled = body.enabled !== undefined ? Boolean(body.enabled) : true;
+      let percentage = parseInt(body.percentage, 10);
+      if (isNaN(percentage) || percentage < 0 || percentage > 99) {
+        percentage = 80;
+      }
+      const title = (body.title || 'Diwali Mega Bumper Offer').trim();
+      const banner = (body.banner || `💥 Diwali Mega Bumper Sale: Flat ${percentage}% OFF on all crackers! Direct Factory Prices.`).trim();
+
+      const updateData = {
+        key: 'global_offer',
+        enabled: enabled,
+        percentage: percentage,
+        title: title,
+        banner: banner,
+        updatedAt: new Date()
+      };
+
+      await settingsCollection.updateOne(
+        { key: 'global_offer' },
+        { $set: updateData },
+        { upsert: true }
+      );
+
+      return sendJson(res, 200, {
+        success: true,
+        message: `Storewide offer set to ${percentage}% OFF successfully.`,
+        offer: updateData
+      });
+    } catch (err) {
+      console.error('Error saving offer settings:', err);
       return sendJson(res, 500, { success: false, error: err.message });
     }
   }

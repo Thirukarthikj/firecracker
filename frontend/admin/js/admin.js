@@ -58,7 +58,7 @@ auth.onAuthStateChanged((user) => {
    TABS
 ═══════════════════════════════════════ */
 function switchTab(tab) {
-  const tabs = ['orders', 'categories', 'types', 'products', 'enquiries', 'newsletter'];
+  const tabs = ['orders', 'categories', 'types', 'products', 'enquiries', 'newsletter', 'offers'];
   tabs.forEach((t) => {
     const panel = document.getElementById(t + 'Panel');
     const tabBtn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -71,6 +71,7 @@ function switchTab(tab) {
   if (tab === 'products') renderGrid();
   if (tab === 'enquiries') renderEnquiries();
   if (tab === 'newsletter') renderNewsletter();
+  if (tab === 'offers') loadOfferSettings();
 }
 
 /* ═══════════════════════════════════════
@@ -1806,3 +1807,146 @@ function populateCategoryAndTypeSelects() {
 // Initial background load of categories and types
 loadCategories();
 loadTypes();
+
+/* ═══════════════════════════════════════════════════════════════
+   GLOBAL STOREWIDE OFFER MANAGEMENT
+═══════════════════════════════════════════════════════════════ */
+let currentOfferData = {
+  enabled: true,
+  percentage: 80,
+  title: 'Diwali Mega Bumper Offer',
+  banner: '💥 Diwali Mega Bumper Sale: Flat 80% OFF on all crackers! Factory Direct Prices.'
+};
+
+async function loadOfferSettings() {
+  try {
+    const res = await fetch('/api/settings/offer');
+    const data = await res.json();
+    if (data.success && data.offer) {
+      currentOfferData = data.offer;
+      const enEl = document.getElementById('offerEnabled');
+      const pctEl = document.getElementById('offerPercentInput');
+      const banEl = document.getElementById('offerBannerInput');
+      if (enEl) enEl.checked = Boolean(data.offer.enabled);
+      if (pctEl) pctEl.value = data.offer.percentage !== undefined ? data.offer.percentage : 80;
+      if (banEl) banEl.value = data.offer.banner || '';
+      updateOfferPreview();
+    }
+  } catch (err) {
+    console.warn('Could not load offer settings:', err);
+  }
+}
+
+function setOfferPreset(pct) {
+  const pctEl = document.getElementById('offerPercentInput');
+  if (pctEl) {
+    pctEl.value = pct;
+    updateOfferPreview();
+  }
+}
+
+function updateOfferPreview() {
+  const enEl = document.getElementById('offerEnabled');
+  const pctEl = document.getElementById('offerPercentInput');
+  const badgeEl = document.getElementById('previewBadge');
+  const offerPriceEl = document.getElementById('previewOfferPrice');
+  const origPriceEl = document.getElementById('previewOriginalPrice');
+  const savingsTextEl = document.getElementById('previewSavingsText');
+
+  const enabled = enEl ? enEl.checked : true;
+  const pct = pctEl ? (parseInt(pctEl.value, 10) || 0) : 80;
+
+  const sampleMrp = 1460;
+
+  if (enabled && pct > 0) {
+    const offerPrice = Math.round(sampleMrp * (1 - (pct / 100)));
+    const savings = sampleMrp - offerPrice;
+
+    if (badgeEl) {
+      badgeEl.style.display = 'block';
+      badgeEl.textContent = `${pct}% off`;
+    }
+    if (offerPriceEl) offerPriceEl.textContent = `₹${offerPrice.toLocaleString('en-IN')}`;
+    if (origPriceEl) {
+      origPriceEl.style.display = 'inline';
+      origPriceEl.textContent = `₹${sampleMrp.toLocaleString('en-IN')}`;
+    }
+    if (savingsTextEl) {
+      savingsTextEl.style.display = 'block';
+      savingsTextEl.textContent = `Customer Saves ₹${savings.toLocaleString('en-IN')} (${pct}% OFF)`;
+    }
+  } else {
+    if (badgeEl) badgeEl.style.display = 'none';
+    if (offerPriceEl) offerPriceEl.textContent = `₹${sampleMrp.toLocaleString('en-IN')}`;
+    if (origPriceEl) origPriceEl.style.display = 'none';
+    if (savingsTextEl) {
+      savingsTextEl.style.display = 'block';
+      savingsTextEl.textContent = `Standard Pricing (Storewide discount disabled)`;
+    }
+  }
+}
+
+async function saveOfferSettings() {
+  const enEl = document.getElementById('offerEnabled');
+  const pctEl = document.getElementById('offerPercentInput');
+  const banEl = document.getElementById('offerBannerInput');
+  const alertEl = document.getElementById('offerSaveAlert');
+
+  const enabled = enEl ? enEl.checked : true;
+  const percentage = pctEl ? (parseInt(pctEl.value, 10) || 80) : 80;
+  const banner = banEl ? banEl.value.trim() : '';
+
+  if (percentage <= 0 || percentage >= 100) {
+    if (alertEl) {
+      alertEl.style.display = 'block';
+      alertEl.style.background = '#fef2f2';
+      alertEl.style.color = '#991b1b';
+      alertEl.style.border = '1px solid #fecaca';
+      alertEl.textContent = 'Please enter a valid discount percentage between 1% and 99%.';
+    }
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/settings/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled,
+        percentage,
+        banner
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      currentOfferData = data.offer || { enabled, percentage, banner };
+      if (alertEl) {
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#f0fdf4';
+        alertEl.style.color = '#166534';
+        alertEl.style.border = '1px solid #bbf7d0';
+        alertEl.innerHTML = `✅ <strong>Success!</strong> Storewide discount set to <strong>${percentage}% OFF</strong>. Product cards in the storefront will now show the <strong>${percentage}% off</strong> green badge and strikethrough original prices!`;
+      }
+      setTimeout(() => {
+        if (alertEl) alertEl.style.display = 'none';
+      }, 5000);
+    } else {
+      if (alertEl) {
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#fef2f2';
+        alertEl.style.color = '#991b1b';
+        alertEl.style.border = '1px solid #fecaca';
+        alertEl.textContent = 'Failed to save offer: ' + (data.error || 'Server error');
+      }
+    }
+  } catch (err) {
+    console.error('Save offer error:', err);
+    if (alertEl) {
+      alertEl.style.display = 'block';
+      alertEl.style.background = '#fef2f2';
+      alertEl.style.color = '#991b1b';
+      alertEl.style.border = '1px solid #fecaca';
+      alertEl.textContent = 'Network error saving offer: ' + err.message;
+    }
+  }
+}

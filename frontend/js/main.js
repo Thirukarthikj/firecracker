@@ -126,27 +126,74 @@ function escapeHtmlCat(str) {
   return div.innerHTML;
 }
 
+var globalStoreOffer = {
+  enabled: true,
+  percentage: 80,
+  title: 'Diwali Mega Bumper Offer',
+  banner: '💥 Diwali Mega Bumper Sale: Flat 80% OFF on all crackers! Factory Direct Prices.'
+};
+
+function loadGlobalStoreOffer() {
+  fetch('/api/settings/offer')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success && data.offer) {
+        globalStoreOffer = data.offer;
+        var bar = document.getElementById('festiveAnnouncementBar');
+        var barText = document.getElementById('festiveAnnouncementText');
+        if (bar && barText) {
+          if (globalStoreOffer.enabled && globalStoreOffer.percentage > 0) {
+            barText.textContent = globalStoreOffer.banner || ('💥 Diwali Mega Bumper Sale: Flat ' + globalStoreOffer.percentage + '% OFF on all crackers! Factory Direct Prices.');
+            bar.style.display = 'flex';
+          } else {
+            bar.style.display = 'none';
+          }
+        }
+        if (typeof productsLoaded !== 'undefined' && productsLoaded) {
+          filterProducts();
+        }
+      }
+    })
+    .catch(function(err) {
+      console.warn('Could not load global store offer settings:', err);
+    });
+}
+
 function renderProductCard(p) {
   var badge = p.badge ? '<span class="product-badge">' + escapeHtmlCat(p.badge) + '</span>' : '';
   var thumb = cloudinaryThumb(p.image, 500);
   var full = p.image || PLACEHOLDER_IMG;
 
-  var mrpNum = parseFloat(p.mrp) || parseFloat(p.price) || 0;
-  var offerNum = parseFloat(p.offerPrice !== undefined ? p.offerPrice : p.price) || 0;
-  var discPct = p.discountPercentage || ((mrpNum > offerNum && mrpNum > 0) ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
+  var mrpNum = parseFloat(p.mrp) > 0 ? parseFloat(p.mrp) : (parseFloat(p.price) > 0 ? parseFloat(p.price) : 0);
+  var offerNum = 0;
+  var discPct = 0;
+  var offerTag = '';
+
+  // Storewide global offer calculation (as configured by admin, e.g. 80% or 85% OFF)
+  if (globalStoreOffer && globalStoreOffer.enabled && globalStoreOffer.percentage > 0 && mrpNum > 0) {
+    discPct = globalStoreOffer.percentage;
+    offerNum = Math.round(mrpNum * (1 - (discPct / 100)));
+    offerTag = '<div class="product-offer-tag">' + discPct + '% off</div>';
+  } else {
+    offerNum = parseFloat(p.offerPrice !== undefined ? p.offerPrice : p.price) || 0;
+    discPct = p.discountPercentage || ((mrpNum > offerNum && mrpNum > 0) ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
+    if (discPct > 0) {
+      offerTag = '<div class="product-offer-tag">' + discPct + '% off</div>';
+    }
+  }
 
   var priceHtml = '';
   if (offerNum > 0) {
     if (discPct > 0 && mrpNum > offerNum) {
-      priceHtml = '<div class="product-price-box">' +
-        '<span class="product-mrp">₹' + mrpNum.toLocaleString('en-IN') + '</span>' +
-        '<span class="product-offer">₹' + offerNum.toLocaleString('en-IN') + '</span>' +
-        '<span class="product-discount-badge">' + discPct + '% OFF</span>' +
+      // Formatted to exactly match Screenshot 2: Bold offer amount on left (₹219), original struck out on right (₹1,460)
+      priceHtml = '<div class="product-price-row">' +
+        '<span class="product-offer-price">₹' + offerNum.toLocaleString('en-IN') + '</span>' +
+        '<span class="product-original-price">₹' + mrpNum.toLocaleString('en-IN') + '</span>' +
         (p.pieces ? '<span class="product-pack-info">(' + escapeHtmlCat(p.pieces) + ')</span>' : '') +
       '</div>';
     } else {
-      priceHtml = '<div class="product-price-box">' +
-        '<span class="product-offer">₹' + offerNum.toLocaleString('en-IN') + '</span>' +
+      priceHtml = '<div class="product-price-row">' +
+        '<span class="product-offer-price">₹' + offerNum.toLocaleString('en-IN') + '</span>' +
         (p.pieces ? '<span class="product-pack-info">(' + escapeHtmlCat(p.pieces) + ')</span>' : '') +
       '</div>';
     }
@@ -156,7 +203,7 @@ function renderProductCard(p) {
 
   return '' +
     '<div class="product-card" data-material="' + (p.material || '') + '" data-type="' + (p.type || '') + '">' +
-      '<div class="product-img">' + badge + '<img src="' + thumb + '" alt="' + escapeHtmlCat(p.name) + '" loading="lazy" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER_IMG + '\'"></div>' +
+      '<div class="product-img">' + offerTag + badge + '<img src="' + thumb + '" alt="' + escapeHtmlCat(p.name) + '" loading="lazy" onerror="this.onerror=null;this.src=\'' + PLACEHOLDER_IMG + '\'"></div>' +
       '<div class="product-info">' +
         '<div class="product-code">' + escapeHtmlCat(p.code) + '</div>' +
         '<div class="product-name">' + escapeHtmlCat(p.name) + '</div>' +
@@ -458,9 +505,18 @@ function addToCartByCode(code, btnEl, e) {
   if (e && e.stopPropagation) e.stopPropagation();
   var p = (allProducts || []).find(function(item) { return item.code === code; });
   if (!p) return;
-  var mrpNum = parseFloat(p.mrp) || parseFloat(p.price) || 0;
-  var offerNum = parseFloat(p.offerPrice !== undefined ? p.offerPrice : p.price) || 0;
-  var discPct = p.discountPercentage || ((mrpNum > offerNum && mrpNum > 0) ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
+  var mrpNum = parseFloat(p.mrp) > 0 ? parseFloat(p.mrp) : (parseFloat(p.price) || 0);
+  var offerNum = 0;
+  var discPct = 0;
+
+  if (globalStoreOffer && globalStoreOffer.enabled && globalStoreOffer.percentage > 0 && mrpNum > 0) {
+    discPct = globalStoreOffer.percentage;
+    offerNum = Math.round(mrpNum * (1 - (discPct / 100)));
+  } else {
+    offerNum = parseFloat(p.offerPrice !== undefined ? p.offerPrice : p.price) || 0;
+    discPct = p.discountPercentage || ((mrpNum > offerNum && mrpNum > 0) ? Math.round(((mrpNum - offerNum) / mrpNum) * 100) : 0);
+  }
+
   var full = p.image || PLACEHOLDER_IMG;
   addToCart(p.code, p.name, offerNum, full, p.pieces || '', btnEl, e, mrpNum, discPct, p.material || '', p.type || '');
 }
@@ -955,6 +1011,7 @@ window.addEventListener('load', function () {
   initFadeUps();
   loadCartFromStorage();
   loadDynamicCategoriesAndTypes();
+  loadGlobalStoreOffer();
 });
 
 document.addEventListener('keydown', function (e) {

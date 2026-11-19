@@ -36,6 +36,7 @@
         <button class="tab-btn" id="tabProducts" onclick="switchTab('products')">Products</button>
         <button class="tab-btn" id="tabEnquiries" onclick="switchTab('enquiries')">Enquiries</button>
         <button class="tab-btn" id="tabNewsletter" onclick="switchTab('newsletter')">Newsletter</button>
+        <button class="tab-btn" id="tabOffers" onclick="switchTab('offers')">💥 Offers</button>
       </div>
 
       <!-- ═══ MONGODB ORDERS PANEL ═══ -->
@@ -175,6 +176,85 @@
           <span id="newsletterCount" style="font-size:0.85rem;color:#777"></span>
         </div>
         <div id="newsletterList" class="data-list"></div>
+      </div>
+
+      <!-- ═══ OFFERS MANAGEMENT PANEL ═══ -->
+      <div id="offersPanel" style="display:none">
+        <div class="panel-header" style="margin-bottom:20px">
+          <h2 style="margin:0 0 6px;font-size:1.4rem;color:var(--ink)">💥 Storewide Festive Offer Management</h2>
+          <p style="margin:0;color:#666;font-size:0.9rem">
+            Set a global discount percentage across all firecrackers on the customer storefront. When active, original prices will be struck out, the discounted offer price is calculated automatically, and an attractive <strong>percentage off</strong> green pill badge appears in the top-left of every product card (referring to the sample layout).
+          </p>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:24px;align-items:start">
+          <!-- Offer Form Card -->
+          <div class="card" style="padding:24px;background:#fff;border:1px solid #e5dac6;border-radius:10px">
+            <h3 style="margin:0 0 16px;font-size:1.1rem;color:var(--ink)">⚙️ Offer Configuration</h3>
+
+            <div class="field" style="margin-bottom:18px">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700;font-size:1rem;color:var(--ink)">
+                <input type="checkbox" id="offerEnabled" style="width:20px;height:20px;accent-color:var(--gold)" onchange="updateOfferPreview()">
+                <span>Enable Storewide Festive Discount</span>
+              </label>
+              <p style="margin:4px 0 0 30px;font-size:0.8rem;color:#777">When enabled, the discount applies immediately to all products in the catalog and checkout.</p>
+            </div>
+
+            <div class="field" style="margin-bottom:18px">
+              <label style="display:block;font-weight:700;margin-bottom:6px">Discount Percentage (%) *</label>
+              <div style="display:flex;align-items:center;gap:10px">
+                <input type="number" id="offerPercentInput" min="1" max="95" value="80" style="font-size:1.2rem;font-weight:700;padding:8px 12px;width:120px" oninput="updateOfferPreview()">
+                <span style="font-size:1.2rem;font-weight:700;color:var(--gold)">% OFF</span>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(50)">50% OFF</button>
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(60)">60% OFF</button>
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(70)">70% OFF</button>
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(75)">75% OFF</button>
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(80)">80% OFF</button>
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(85)">85% OFF</button>
+                <button type="button" class="secondary" style="padding:4px 10px;font-size:0.8rem" onclick="setOfferPreset(90)">90% OFF</button>
+              </div>
+            </div>
+
+            <div class="field" style="margin-bottom:18px">
+              <label style="display:block;font-weight:700;margin-bottom:6px">Offer Announcement Banner / Tagline</label>
+              <input type="text" id="offerBannerInput" placeholder="e.g. 💥 Diwali Mega Bumper Sale: Flat 80% OFF on all crackers!" style="width:100%;padding:10px" oninput="updateOfferPreview()">
+              <p style="margin:4px 0 0;font-size:0.8rem;color:#777">Shown in the top announcement bar on the storefront to attract customers.</p>
+            </div>
+
+            <div id="offerSaveAlert" style="display:none;padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:0.88rem"></div>
+
+            <button type="button" class="primary" style="padding:12px 24px;font-size:1rem;font-weight:700;width:100%" onclick="saveOfferSettings()">
+              💾 Save &amp; Apply Offer to Storefront
+            </button>
+          </div>
+
+          <!-- Live Card Preview Card -->
+          <div class="card" style="padding:24px;background:#fbf9f5;border:1px solid #e0d5be;border-radius:10px">
+            <h3 style="margin:0 0 8px;font-size:1.1rem;color:var(--ink)">👁️ Live Customer Card Preview</h3>
+            <p style="margin:0 0 16px;font-size:0.84rem;color:#777">This is exactly how cracker products will display to customers on the website (referring to the sample layout in Screenshot 2):</p>
+
+            <div style="max-width:260px;margin:0 auto;background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06);position:relative">
+              <!-- Top-left Offer Badge (Refer Image 2) -->
+              <div id="previewBadge" style="position:absolute;top:10px;left:10px;background:#15803d;color:#fff;font-size:0.82rem;font-weight:800;padding:4px 12px;border-radius:20px;z-index:2;box-shadow:0 2px 5px rgba(0,0,0,0.25)">
+                80% off
+              </div>
+              <img src="../images/collections-hero.jpg" alt="Preview Cracker" style="width:100%;height:180px;object-fit:cover;display:block" onerror="this.src='https://placehold.co/300x200?text=Cracker+Preview'">
+              <div style="padding:14px">
+                <div style="font-weight:700;font-size:1rem;color:#18181b;line-height:1.3;margin-bottom:4px">6 " inch Tin Buttercup Green Fall</div>
+                <div style="font-size:0.8rem;color:#71717a;margin-bottom:10px">1 Pc &middot; Fountains</div>
+                <div style="display:flex;align-items:baseline;gap:8px">
+                  <span id="previewOfferPrice" style="font-size:1.35rem;font-weight:800;color:#111">₹292</span>
+                  <span id="previewOriginalPrice" style="font-size:0.95rem;color:#71717a;text-decoration:line-through;font-weight:500">₹1,460</span>
+                </div>
+                <div id="previewSavingsText" style="font-size:0.75rem;color:#15803d;font-weight:600;margin-top:4px">
+                  Customer Saves ₹1,168 (80% OFF)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
