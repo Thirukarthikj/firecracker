@@ -1088,8 +1088,8 @@ async function downloadInvoicePDF(orderId) {
   doc.setFontSize(8.5);
   doc.setTextColor(220, 215, 205);
   doc.text('Direct from Sivakasi Factory - Premium Festive Fireworks & Crackers', 14, 21);
-  doc.text('Shop Location: 12°44\'14.5"N 77°49\'49.1"E (12.737351, 77.830307) | Phone: +91 9342553805', 14, 26);
-  doc.text('Email: velagencies@gmail.com | GSTIN: 33AAACF8124P1Z4 | Lic: W/TN/DIS/04/2024', 14, 31);
+  doc.text('No.41, Parameswara Building, Bagalur Road, HOSUR - 635 109. | Phone: +91 9443430634', 14, 26);
+  doc.text('Email: hsr.velagencies@gmail.com | GSTIN: 33AAACF8124P1Z4 | Lic: W/TN/DIS/04/2024', 14, 31);
 
   // Invoice title badge right-aligned
   doc.setFont('helvetica', 'bold');
@@ -1302,7 +1302,7 @@ async function downloadInvoicePDF(orderId) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(230, 225, 215);
-  doc.text('Wishing you and your family a safe, prosperous, and sparkling celebration! Vel Agencies, 12°44\'14.5"N 77°49\'49.1"E', 105, 292, { align: 'center' });
+  doc.text('Wishing you and your family a safe, prosperous, and sparkling celebration! Vel Agencies, Hosur - 635 109.', 105, 292, { align: 'center' });
 
   const filename = `Invoice_${order.invoiceNumber || order.orderNumber}.pdf`;
   doc.save(filename);
@@ -1371,9 +1371,9 @@ async function shareInvoiceWhatsApp(orderId) {
     `✨ *Thank you for celebrating with Vel Agencies!*`,
     `📄 Your official PDF invoice (*${result ? result.filename : 'Invoice.pdf'}*) has been generated. We have attached the invoice document copy for your reference!`,
     ``,
-    `📍 Shop Location: 12°44'14.5"N 77°49'49.1"E (12.737351, 77.830307)`,
+    `📍 Address: No.41, Parameswara Building, Bagalur Road, HOSUR - 635 109.`,
     `🗺️ Google Maps: https://maps.google.com/maps?q=12.737351,77.830307`,
-    `📞 Vel Agencies Helpline: +91 9342553805`
+    `📞 Vel Agencies Helpline: +91 9443430634`
   ].filter(Boolean).join('\n');
 
   window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');

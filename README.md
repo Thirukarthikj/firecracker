@@ -14,7 +14,7 @@ An end-to-end e-commerce web platform for **Vel Agencies & Fireworks**, featurin
   - Box packing details, quantity increment/decrement (`-` / `+`), and instant price calculation.
 - **WhatsApp Direct Order Checkout:**
   - Customer enters name, phone number, and delivery city.
-  - Generates itemized order breakdown and submits order via WhatsApp to **+91 9342553805**.
+  - Generates itemized order breakdown and submits order via WhatsApp to **+91 9443430634**.
   - Automatically records order details in **MongoDB** database.
 
 ### 🛡️ Admin Dashboard (`/admin/`)

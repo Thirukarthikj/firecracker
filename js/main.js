@@ -92,7 +92,7 @@ testiTimer = setTimeout(function () { goTesti(1); }, 5000);
 /* ═══════════════════════════════════════
    WHATSAPP ENQUIRY
 ═══════════════════════════════════════ */
-var WHATSAPP_NUMBER = '919342553805';
+var WHATSAPP_NUMBER = '919443430634';
 
 function sendToWhatsApp(message) {
   window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(message), '_blank');
