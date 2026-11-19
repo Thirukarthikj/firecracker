@@ -1059,7 +1059,16 @@ async function downloadInvoicePDF(orderId) {
   const doc = new jsPdfLib({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a4'
+    format: 'a4',
+    compress: true
+  });
+
+  // Standard ISO A4 Dimensions: 210mm x 297mm
+  doc.setProperties({
+    title: `Invoice #${order.invoiceNumber || order.orderNumber}`,
+    subject: 'Order Invoice - Vel Agencies',
+    author: 'Vel Agencies',
+    creator: 'Vel Agencies A4 Invoice Generator'
   });
 
   const cust = order.shippingAddress || {};
@@ -1089,16 +1098,16 @@ async function downloadInvoicePDF(orderId) {
   doc.setTextColor(220, 215, 205);
   doc.text('Direct from Sivakasi Factory - Premium Festive Fireworks & Crackers', 14, 21);
   doc.text('No.41, Parameswara Building, Bagalur Road, HOSUR - 635 109. | Phone: +91 9443430634', 14, 26);
-  doc.text('Email: hsr.velagencies@gmail.com | GSTIN: 33AAACF8124P1Z4 | Lic: W/TN/DIS/04/2024', 14, 31);
+  doc.text('Email: hsr.velagencies@gmail.com | Helpline: +91 9443430634 | Lic: W/TN/DIS/04/2024', 14, 31);
 
-  // Invoice title badge right-aligned
+  // Invoice title badge right-aligned (No Tax Invoice)
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(15);
   doc.setTextColor(235, 190, 80);
-  doc.text('TAX INVOICE', 196, 17, { align: 'right' });
-  doc.setFontSize(9);
+  doc.text('INVOICE', 196, 17, { align: 'right' });
+  doc.setFontSize(8.5);
   doc.setTextColor(255, 255, 255);
-  doc.text('ORIGINAL FOR RECIPIENT', 196, 23, { align: 'right' });
+  doc.text('CUSTOMER BILL / RECEIPT', 196, 23, { align: 'right' });
 
   // 2-Column Info Blocks
   const boxTop = 46;
@@ -1191,13 +1200,15 @@ async function downloadInvoicePDF(orderId) {
 
   if (doc.autoTable) {
     doc.autoTable({
-      startY: 88,
+      startY: 86,
       head: [['#', 'Item Description', 'Category', 'Packing', 'Qty', 'MRP', 'Offer Rate', 'Amount']],
       body: tableRows,
       theme: 'grid',
+      margin: { left: 14, right: 14, top: 42, bottom: 20 },
+      tableWidth: 182,
       styles: {
         fontSize: 8,
-        cellPadding: 2.8,
+        cellPadding: 2.6,
         textColor: [30, 30, 30],
         lineColor: [226, 221, 210]
       },
@@ -1214,8 +1225,8 @@ async function downloadInvoicePDF(orderId) {
         3: { cellWidth: 22 },
         4: { cellWidth: 12, halign: 'center' },
         5: { cellWidth: 20, halign: 'right' },
-        6: { cellWidth: 22, halign: 'right' },
-        7: { cellWidth: 22, halign: 'right' }
+        6: { cellWidth: 20, halign: 'right' },
+        7: { cellWidth: 20, halign: 'right' }
       },
       alternateRowStyles: {
         fillColor: [252, 250, 247]
@@ -1223,7 +1234,15 @@ async function downloadInvoicePDF(orderId) {
     });
   }
 
-  const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 6 : 140;
+  let currentY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 6 : 140;
+
+  // Standard A4 Height = 297mm. Bottom footer ribbon starts at 285mm.
+  // Financial summary and signatory box require ~66mm.
+  // If currentY + 66 > 280, cleanly move summary and signature to next A4 page.
+  if (currentY + 66 > 280) {
+    doc.addPage('a4', 'portrait');
+    currentY = 20;
+  }
 
   // Financial Summary Block
   const totalMrp = Number(order.totalMrp) || totalMrpCalc;
@@ -1232,7 +1251,7 @@ async function downloadInvoicePDF(orderId) {
   const grandTotal = subtotal;
 
   const sumBoxX = 114;
-  const sumBoxY = finalY;
+  const sumBoxY = currentY;
   const sumBoxW = 82;
 
   doc.setFillColor(255, 255, 255);
@@ -1296,13 +1315,20 @@ async function downloadInvoicePDF(orderId) {
   doc.setFontSize(7);
   doc.text('(Digitally Generated Invoice - No Physical Signature Required)', 196, signY + 14, { align: 'right' });
 
-  // Bottom Footer Ribbon
-  doc.setFillColor(26, 18, 8);
-  doc.rect(0, 285, 210, 12, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(230, 225, 215);
-  doc.text('Wishing you and your family a safe, prosperous, and sparkling celebration! Vel Agencies, Hosur - 635 109.', 105, 292, { align: 'center' });
+  // Draw Bottom Footer Ribbon on all A4 pages
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFillColor(26, 18, 8);
+    doc.rect(0, 285, 210, 12, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(230, 225, 215);
+    doc.text('Wishing you and your family a safe, prosperous, and sparkling celebration! Vel Agencies, Hosur - 635 109.', 105, 291.5, { align: 'center' });
+    doc.setFontSize(7);
+    doc.setTextColor(184, 147, 58);
+    doc.text(`A4 • Page ${p} of ${totalPages}`, 196, 291.5, { align: 'right' });
+  }
 
   const filename = `Invoice_${order.invoiceNumber || order.orderNumber}.pdf`;
   doc.save(filename);

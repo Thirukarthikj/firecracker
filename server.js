@@ -235,8 +235,7 @@ const server = http.createServer(async (req, res) => {
           name: 'Vel Agencies',
           address: 'No.41, Parameswara Building, Bagalur Road, HOSUR - 635 109, Tamil Nadu, India',
           phone: '+91 9443430634',
-          email: 'hsr.velagencies@gmail.com',
-          gstin: '33AAACF8124P1Z4'
+          email: 'hsr.velagencies@gmail.com'
         },
         notes: (body.customer.instructions || body.instructions || body.notes || '').trim(),
         createdAt: new Date(),
