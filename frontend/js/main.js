@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   SIVAKASI FIRECRACKERS — FRONTEND LOGIC
+   VEL AGENCIES — FRONTEND LOGIC
    Data source: Firebase Firestore ("products" collection)
    Images: Cloudinary URLs stored on each product document
 ═══════════════════════════════════════════════════════════════ */
@@ -411,7 +411,7 @@ function submitEnquiry() {
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(function (err) { console.error('Could not save enquiry:', err); });
 
-  var waMessage = 'New Enquiry — Sivakasi Firecrackers\n\n' +
+  var waMessage = 'New Enquiry — Vel Agencies\n\n' +
     'Product: ' + productName + ' (' + productCode + ')\n' +
     'Name: ' + name + '\n' +
     'Phone: ' + phone + '\n' +
@@ -441,7 +441,7 @@ function submitContactForm() {
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(function (err) { console.error('Could not save enquiry:', err); });
 
-  var waMessage = 'New Enquiry — Sivakasi Firecrackers (Contact Page)\n\n' +
+  var waMessage = 'New Enquiry — Vel Agencies (Contact Page)\n\n' +
     'Name: ' + name + '\n' +
     'Email: ' + email + '\n' +
     (phone ? 'Phone: ' + phone + '\n' : '') +
@@ -467,10 +467,10 @@ function subscribeNewsletter() {
     email: email,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function () {
-    alert('Thank you for subscribing to Sivakasi Firecrackers!');
+    alert('Thank you for subscribing to Vel Agencies!');
   }).catch(function (err) {
     console.error('Could not save subscription:', err);
-    alert('Thank you for subscribing to Sivakasi Firecrackers!');
+    alert('Thank you for subscribing to Vel Agencies!');
   });
 
   fields.forEach(function (id) {

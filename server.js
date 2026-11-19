@@ -232,10 +232,10 @@ const server = http.createServer(async (req, res) => {
         paymentStatus: 'pending',
         paymentMethod: body.paymentMethod || 'direct_order',
         companyDetails: {
-          name: 'Sivakasi Firecrackers',
-          address: 'Main Road, Sivakasi – 626 123, Virudhunagar Dist., Tamil Nadu, India',
+          name: 'Vel Agencies',
+          address: '12°44\'14.5"N 77°49\'49.1"E (12.737351, 77.830307), Tamil Nadu, India',
           phone: '+91 9342553805',
-          email: 'sales@sivakasifirecrackers.com',
+          email: 'velagencies@gmail.com',
           gstin: '33AAACF8124P1Z4'
         },
         notes: (body.customer.instructions || body.instructions || body.notes || '').trim(),
